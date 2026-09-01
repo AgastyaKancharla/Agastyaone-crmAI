@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// Phase 1 has no file upload features yet (that lands with Clinical/Patient Docs in a
+// later phase). Deny everything until a concrete need defines a scoped, tenant-aware
+// path and rule.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

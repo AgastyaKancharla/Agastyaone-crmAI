@@ -1,0 +1,27 @@
+# Android / Gradle
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+app/build/
+app/release/
+app/debug/
+
+# The real Firebase config is per-developer/per-environment; never commit it.
+app/google-services.json
+
+# Node / Cloud Functions
+functions/node_modules/
+functions/lib/
+npm-debug.log*
+
+# Firebase local state
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+ui-debug.log
