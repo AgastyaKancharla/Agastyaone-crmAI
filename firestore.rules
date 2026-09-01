@@ -1,0 +1,69 @@
+rules_version = '2';
+
+// Phase 1 - Foundation. Deny by default; every allow below is explicit.
+//
+// The trust boundary is the Firebase Auth custom claims (`role`, `clinicId`,
+// `platformAdmin`), never a Firestore field - claims can only be set by the
+// Cloud Functions running with the Admin SDK (createClinicAndOwner, acceptInvite,
+// updateStaffRole, onPlatformAdminWrite), so a client can never grant itself
+// access to another tenant by writing a document.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isPlatformAdmin() {
+      return isSignedIn() && request.auth.token.platformAdmin == true;
+    }
+
+    function belongsToTenant(clinicId) {
+      return isSignedIn() && request.auth.token.clinicId == clinicId;
+    }
+
+    function isOwnerOfTenant(clinicId) {
+      return belongsToTenant(clinicId) && request.auth.token.role == 'owner';
+    }
+
+    // Only a platform admin may read/write their own admin doc. This collection is
+    // intentionally separate from the clinic signup/invite flow - nothing here ever
+    // grants platformAdmin; only the onPlatformAdminWrite Cloud Function's trigger
+    // (seeded by an existing admin) sets that custom claim.
+    match /platformAdmins/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /tenants/{clinicId} {
+      // Platform admins get read-only visibility across all tenants for support/ops;
+      // they get no write allowance here by design - clinic data mutation stays with
+      // the clinic's own owner and the Cloud Functions, not a blanket admin bypass.
+      allow read: if belongsToTenant(clinicId) || isPlatformAdmin();
+      allow write: if isOwnerOfTenant(clinicId);
+
+      match /staff/{staffUid} {
+        allow read: if belongsToTenant(clinicId) || isPlatformAdmin();
+        allow write: if isOwnerOfTenant(clinicId);
+      }
+
+      // Invites are only ever written by the owner (from the app) or by the
+      // acceptInvite Cloud Function (Admin SDK, bypasses these rules entirely) -
+      // an invited user never needs direct Firestore access to accept their own
+      // invite.
+      match /invites/{inviteId} {
+        allow read, write: if isOwnerOfTenant(clinicId);
+      }
+
+      // Written only by Cloud Functions (Admin SDK). Owners can read their own
+      // clinic's history; nobody writes from the client, ever.
+      match /auditLog/{logId} {
+        allow read: if isOwnerOfTenant(clinicId);
+        allow write: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

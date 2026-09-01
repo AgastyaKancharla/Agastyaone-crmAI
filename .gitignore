@@ -1,0 +1,28 @@
+# Android / Gradle
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+app/build/
+app/release/
+app/debug/
+
+# Node / Cloud Functions
+functions/node_modules/
+functions/lib/
+npm-debug.log*
+
+# Node / Firestore rules tests
+firestore-tests/node_modules/
+
+# Firebase local state
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
