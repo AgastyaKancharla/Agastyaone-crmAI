@@ -20,14 +20,15 @@ jobs:
       - name: Grant execute permission to gradlew
         run: chmod +x gradlew
 
-      - name: Use placeholder google-services.json
-        # The real, project-specific google-services.json is gitignored (see README).
-        # This dummy file has no real secrets - it only satisfies the google-services
-        # Gradle plugin so assembleDebug/lint can run without a live Firebase project.
-        run: cp app/google-services.ci.json app/google-services.json
-
       - name: Assemble debug APK
         run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
 
       - name: Run Android lint
         run: ./gradlew :app:lint --no-daemon

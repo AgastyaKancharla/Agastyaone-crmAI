@@ -12,9 +12,6 @@ app/build/
 app/release/
 app/debug/
 
-# The real Firebase config is per-developer/per-environment; never commit it.
-app/google-services.json
-
 # Node / Cloud Functions
 functions/node_modules/
 functions/lib/

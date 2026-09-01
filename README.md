@@ -35,14 +35,18 @@ modules yet — this phase only builds the foundation those will sit on.
 
 ## 2. Place `google-services.json`
 
-Put the downloaded file at:
+`app/google-services.json` is already committed, pointing at the `agastyaone-crm`
+Firebase project - the API key in this file identifies the project to Google's
+services but isn't a secret (Firebase security comes from Security Rules and App
+Check, not from hiding this file), so it's safe to keep in the repo. If you point
+this app at a different Firebase project, download your own from Project settings
+and overwrite the file at:
 
 ```
 app/google-services.json
 ```
 
-(Next to `app/build.gradle.kts`.) It's gitignored — never commit it; it's
-per-project/per-developer config, not source.
+(Next to `app/build.gradle.kts`.)
 
 ## 3. Wire up the Firebase CLI
 
