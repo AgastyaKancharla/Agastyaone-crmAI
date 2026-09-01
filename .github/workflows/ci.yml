@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  android:
+    name: Android (assembleDebug + lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Grant execute permission to gradlew
+        run: chmod +x gradlew
+
+      - name: Use placeholder google-services.json
+        # The real, project-specific google-services.json is gitignored (see README).
+        # This dummy file has no real secrets - it only satisfies the google-services
+        # Gradle plugin so assembleDebug/lint can run without a live Firebase project.
+        run: cp app/google-services.ci.json app/google-services.json
+
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Run Android lint
+        run: ./gradlew :app:lint --no-daemon
+
+  functions:
+    name: Cloud Functions (typecheck + lint)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint
