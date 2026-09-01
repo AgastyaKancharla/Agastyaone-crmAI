@@ -32,6 +32,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+        // Several Material3 components this app uses (TopAppBar, SecondaryTabRow,
+        // ExposedDropdownMenuBox) are still marked @ExperimentalMaterial3Api even
+        // though they're the documented way to build these screens.
+        freeCompilerArgs += listOf("-opt-in=androidx.compose.material3.ExperimentalMaterial3Api")
     }
 
     buildFeatures {
