@@ -68,6 +68,18 @@ service cloud.firestore {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fieldList);
     }
 
+    // Referential integrity for Phase 2b: an appointment/waitlist entry may only point
+    // at a patient that actually exists in this tenant. Enforced here with exists(),
+    // not a Cloud Function trigger, because a trigger only runs *after* the write has
+    // already committed - there'd be a real window where an invalid appointment is
+    // sitting in Firestore (and visible to any listener, e.g. the calendar) before the
+    // function could react to it. exists() runs as part of the same atomic write
+    // evaluation, so a bad reference is rejected before it's ever persisted, with no
+    // race window and no cleanup job needed.
+    function patientExists(clinicId, patientId) {
+      return exists(/databases/$(database)/documents/tenants/$(clinicId)/patients/$(patientId));
+    }
+
     // Only a platform admin may read/write their own admin doc. This collection is
     // intentionally separate from the clinic signup/invite flow - nothing here ever
     // grants platformAdmin; only the onPlatformAdminWrite Cloud Function's trigger
@@ -142,6 +154,41 @@ service cloud.firestore {
       // else to see or touch it yet.
       match /dataRequests/{requestId} {
         allow read, write: if isOwnerOfTenant(clinicId);
+      }
+
+      // Phase 2b - scheduling & calendar. Owner/receptionist have full CRUD;
+      // assistant is read-only (they need to know who's coming in, per the calendar
+      // screen, but scheduling itself stays an administrative/front-desk action).
+      // Lab Coordinator isn't in this allow list at all - the same total exclusion
+      // as the patient records module, just via omission rather than a named
+      // function here (there's no "everyone but Lab Coordinator" read case to guard,
+      // unlike canReadPatientRecords()).
+      match /appointments/{appointmentId} {
+        allow read: if isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId) ||
+          isAssistantOfTenant(clinicId);
+
+        allow create: if (isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId)) &&
+          patientExists(clinicId, request.resource.data.patientId);
+
+        allow update: if (isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId)) &&
+          patientExists(clinicId, request.resource.data.patientId);
+
+        allow delete: if isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId);
+      }
+
+      // Waitlist management stays with owner/receptionist, same as the rest of
+      // scheduling - not mentioned as part of the assistant's calendar-viewing scope,
+      // so (per the deny-by-default default) they get no access here at all.
+      match /waitlist/{entryId} {
+        allow read: if isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId);
+
+        allow create: if (isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId)) &&
+          patientExists(clinicId, request.resource.data.patientId);
+
+        allow update: if (isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId)) &&
+          patientExists(clinicId, request.resource.data.patientId);
+
+        allow delete: if isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId);
       }
     }
 

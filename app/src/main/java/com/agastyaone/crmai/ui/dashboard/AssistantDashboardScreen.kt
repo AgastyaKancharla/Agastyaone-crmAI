@@ -3,7 +3,7 @@ package com.agastyaone.crmai.ui.dashboard
 import androidx.compose.runtime.Composable
 
 @Composable
-fun AssistantDashboardScreen(onSignOut: () -> Unit, onOpenPatients: () -> Unit) {
+fun AssistantDashboardScreen(onSignOut: () -> Unit, onOpenPatients: () -> Unit, onOpenSchedule: () -> Unit) {
     DashboardScaffold(
         title = "Clinic dashboard",
         subtitle = "Assistant / Hygienist",
@@ -12,6 +12,9 @@ fun AssistantDashboardScreen(onSignOut: () -> Unit, onOpenPatients: () -> Unit) 
             // conditions, current medications, medical history) are editable here -
             // demographics stay receptionist/owner territory.
             DashboardTile("Patients", onClick = onOpenPatients),
+            // Read-only calendar - the Schedule screen itself hides every edit control
+            // for this role, and firestore.rules would reject any write attempt anyway.
+            DashboardTile("Schedule", onClick = onOpenSchedule),
         ),
         onSignOut = onSignOut,
     )

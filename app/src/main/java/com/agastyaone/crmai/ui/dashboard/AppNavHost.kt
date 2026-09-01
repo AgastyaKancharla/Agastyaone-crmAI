@@ -22,6 +22,10 @@ import com.agastyaone.crmai.ui.patients.PatientClinicalEditScreen
 import com.agastyaone.crmai.ui.patients.PatientDetailScreen
 import com.agastyaone.crmai.ui.patients.PatientFormScreen
 import com.agastyaone.crmai.ui.patients.PatientListScreen
+import com.agastyaone.crmai.ui.scheduling.AppointmentDetailScreen
+import com.agastyaone.crmai.ui.scheduling.CalendarScreen
+import com.agastyaone.crmai.ui.scheduling.WaitlistScreen
+import com.agastyaone.crmai.ui.scheduling.WalkInScreen
 
 private const val ROUTE_DASHBOARD = "dashboard"
 private const val ROUTE_INVITE_STAFF = "inviteStaff"
@@ -33,11 +37,17 @@ private const val ROUTE_PATIENT_EDIT_DEMOGRAPHICS = "patients/{$ARG_PATIENT_ID}/
 private const val ROUTE_PATIENT_EDIT_CLINICAL = "patients/{$ARG_PATIENT_ID}/editClinical"
 private const val ROUTE_PATIENT_INTAKE = "patients/{$ARG_PATIENT_ID}/intake"
 private const val ROUTE_DATA_REQUESTS = "dataRequests"
+private const val ROUTE_CALENDAR = "calendar"
+private const val ROUTE_WALK_IN = "calendar/walkIn"
+private const val ROUTE_WAITLIST = "calendar/waitlist"
+private const val ARG_APPOINTMENT_ID = "appointmentId"
+private const val ROUTE_APPOINTMENT_DETAIL = "calendar/appointments/{$ARG_APPOINTMENT_ID}"
 
 private fun patientDetailRoute(patientId: String) = "patients/$patientId"
 private fun patientEditDemographicsRoute(patientId: String) = "patients/$patientId/editDemographics"
 private fun patientEditClinicalRoute(patientId: String) = "patients/$patientId/editClinical"
 private fun patientIntakeRoute(patientId: String) = "patients/$patientId/intake"
+private fun appointmentDetailRoute(appointmentId: String) = "calendar/appointments/$appointmentId"
 
 /** Everything reachable once the signed-in user has a resolved clinic role. */
 @Composable
@@ -54,14 +64,17 @@ fun AppNavHost(session: SessionState.Staff, onSignOut: () -> Unit) {
                     onOpenStaff = { navController.navigate(ROUTE_INVITE_STAFF) },
                     onOpenPatients = { navController.navigate(ROUTE_PATIENT_LIST) },
                     onOpenDataRequests = { navController.navigate(ROUTE_DATA_REQUESTS) },
+                    onOpenSchedule = { navController.navigate(ROUTE_CALENDAR) },
                 )
                 Role.RECEPTIONIST -> ReceptionistDashboardScreen(
                     onSignOut = onSignOut,
                     onOpenPatients = { navController.navigate(ROUTE_PATIENT_LIST) },
+                    onOpenSchedule = { navController.navigate(ROUTE_CALENDAR) },
                 )
                 Role.ASSISTANT -> AssistantDashboardScreen(
                     onSignOut = onSignOut,
                     onOpenPatients = { navController.navigate(ROUTE_PATIENT_LIST) },
+                    onOpenSchedule = { navController.navigate(ROUTE_CALENDAR) },
                 )
                 Role.LAB_COORDINATOR -> LabCoordinatorDashboardScreen(onSignOut = onSignOut)
             }
@@ -145,6 +158,42 @@ fun AppNavHost(session: SessionState.Staff, onSignOut: () -> Unit) {
         }
         composable(ROUTE_DATA_REQUESTS) {
             DataRequestsScreen(clinicId = clinicId, uid = uid, onBack = { navController.popBackStack() })
+        }
+        composable(ROUTE_CALENDAR) {
+            CalendarScreen(
+                clinicId = clinicId,
+                role = session.role,
+                onBack = { navController.popBackStack() },
+                onOpenAppointment = { appointmentId -> navController.navigate(appointmentDetailRoute(appointmentId)) },
+                onAddWalkIn = { navController.navigate(ROUTE_WALK_IN) },
+                onOpenWaitlist = { navController.navigate(ROUTE_WAITLIST) },
+            )
+        }
+        composable(ROUTE_WALK_IN) {
+            WalkInScreen(
+                clinicId = clinicId,
+                uid = uid,
+                // The patient-creation screen returns to the patient's own detail page,
+                // not back into this in-progress walk-in form - the receptionist re-opens
+                // the FAB from the calendar to finish booking once the patient exists.
+                onGoToPatientCreation = { navController.navigate(ROUTE_PATIENT_ADD) },
+                onBooked = { navController.popBackStack() },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(ROUTE_WAITLIST) {
+            WaitlistScreen(clinicId = clinicId, uid = uid, onBack = { navController.popBackStack() })
+        }
+        composable(
+            ROUTE_APPOINTMENT_DETAIL,
+            arguments = listOf(navArgument(ARG_APPOINTMENT_ID) { type = NavType.StringType }),
+        ) { backStackEntry ->
+            AppointmentDetailScreen(
+                clinicId = clinicId,
+                appointmentId = backStackEntry.arguments?.getString(ARG_APPOINTMENT_ID).orEmpty(),
+                role = session.role,
+                onBack = { navController.popBackStack() },
+            )
         }
     }
 }

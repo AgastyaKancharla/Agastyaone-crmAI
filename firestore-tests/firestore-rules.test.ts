@@ -94,6 +94,41 @@ async function seedFixtures(): Promise<void> {
       signatureUrl: null,
       recordedByUid: "ownerB",
     });
+    await setDoc(doc(db, "tenants/A/appointments/appointmentA1"), {
+      patientId: "patientA1",
+      patientName: "Alice Apple",
+      dentistUid: "ownerA",
+      startTime: "2026-02-01T09:00:00Z",
+      endTime: "2026-02-01T09:30:00Z",
+      status: "scheduled",
+      source: "phone",
+      notes: "",
+      createdByUid: "receptionistA",
+      createdAt: "2026-01-15T00:00:00Z",
+      cancelledReason: null,
+    });
+    await setDoc(doc(db, "tenants/A/waitlist/waitlistA1"), {
+      patientId: "patientA1",
+      patientName: "Alice Apple",
+      preferredDates: ["2026-02-03T00:00:00Z"],
+      notes: "",
+      addedAt: "2026-01-15T00:00:00Z",
+      addedByUid: "receptionistA",
+      status: "waiting",
+    });
+    await setDoc(doc(db, "tenants/B/appointments/appointmentB1"), {
+      patientId: "patientB1",
+      patientName: "Bob Banana",
+      dentistUid: "ownerB",
+      startTime: "2026-02-01T10:00:00Z",
+      endTime: "2026-02-01T10:30:00Z",
+      status: "scheduled",
+      source: "phone",
+      notes: "",
+      createdByUid: "ownerB",
+      createdAt: "2026-01-15T00:00:00Z",
+      cancelledReason: null,
+    });
     await setDoc(doc(db, "platformAdmins/adminX"), {
       name: "Admin X",
       email: "adminx@agastyaone.com",
@@ -361,6 +396,125 @@ describe("patient consents - tenant isolation", () => {
         revokedAt: null,
         signatureUrl: null,
         recordedByUid: "receptionistA",
+      })
+    );
+  });
+});
+
+describe("scheduling - appointments", () => {
+  it("lets the receptionist create, edit, and cancel an appointment within their own clinic", async () => {
+    await seedFixtures();
+    const db = receptionistAContext().firestore();
+
+    await assertSucceeds(
+      setDoc(doc(db, "tenants/A/appointments/appointmentA2"), {
+        patientId: "patientA1",
+        patientName: "Alice Apple",
+        dentistUid: "ownerA",
+        startTime: "2026-02-02T09:00:00Z",
+        endTime: "2026-02-02T09:30:00Z",
+        status: "scheduled",
+        source: "walkIn",
+        notes: "",
+        createdByUid: "receptionistA",
+        createdAt: "2026-01-16T00:00:00Z",
+        cancelledReason: null,
+      })
+    );
+
+    const appointmentRef = doc(db, "tenants/A/appointments/appointmentA1");
+    await assertSucceeds(updateDoc(appointmentRef, { status: "confirmed" }));
+    await assertSucceeds(
+      updateDoc(appointmentRef, { status: "cancelled", cancelledReason: "Patient requested" })
+    );
+  });
+
+  it("lets the assistant read an appointment but rejects any write attempt", async () => {
+    await seedFixtures();
+    const db = assistantAContext().firestore();
+
+    await assertSucceeds(getDoc(doc(db, "tenants/A/appointments/appointmentA1")));
+    await assertFails(
+      updateDoc(doc(db, "tenants/A/appointments/appointmentA1"), { status: "confirmed" })
+    );
+    await assertFails(
+      setDoc(doc(db, "tenants/A/appointments/appointmentA2"), {
+        patientId: "patientA1",
+        patientName: "Alice Apple",
+        dentistUid: "ownerA",
+        startTime: "2026-02-02T09:00:00Z",
+        endTime: "2026-02-02T09:30:00Z",
+        status: "scheduled",
+        source: "walkIn",
+        notes: "",
+        createdByUid: "assistantA",
+        createdAt: "2026-01-16T00:00:00Z",
+        cancelledReason: null,
+      })
+    );
+  });
+
+  it("CORE: rejects a Lab Coordinator's read and write of appointments and waitlist entries outright", async () => {
+    await seedFixtures();
+    const db = labCoordinatorAContext().firestore();
+
+    await assertFails(getDoc(doc(db, "tenants/A/appointments/appointmentA1")));
+    await assertFails(
+      updateDoc(doc(db, "tenants/A/appointments/appointmentA1"), { status: "confirmed" })
+    );
+    await assertFails(getDoc(doc(db, "tenants/A/waitlist/waitlistA1")));
+    await assertFails(updateDoc(doc(db, "tenants/A/waitlist/waitlistA1"), { status: "offered" }));
+  });
+
+  it("CORE: denies clinic A staff any read or write of clinic B's appointments and waitlist", async () => {
+    await seedFixtures();
+    const db = ownerAContext().firestore();
+
+    await assertFails(getDoc(doc(db, "tenants/B/appointments/appointmentB1")));
+    await assertFails(
+      updateDoc(doc(db, "tenants/B/appointments/appointmentB1"), { status: "confirmed" })
+    );
+    await assertFails(
+      setDoc(doc(db, "tenants/B/waitlist/intruderEntry"), {
+        patientId: "patientB1",
+        patientName: "Bob Banana",
+        preferredDates: [],
+        notes: "",
+        addedAt: "2026-01-16T00:00:00Z",
+        addedByUid: "ownerA",
+        status: "waiting",
+      })
+    );
+  });
+
+  it("rejects an appointment or waitlist write that references a patientId not in this tenant", async () => {
+    await seedFixtures();
+    const db = receptionistAContext().firestore();
+
+    await assertFails(
+      setDoc(doc(db, "tenants/A/appointments/appointmentGhost"), {
+        patientId: "noSuchPatient",
+        patientName: "Ghost Patient",
+        dentistUid: "ownerA",
+        startTime: "2026-02-02T09:00:00Z",
+        endTime: "2026-02-02T09:30:00Z",
+        status: "scheduled",
+        source: "walkIn",
+        notes: "",
+        createdByUid: "receptionistA",
+        createdAt: "2026-01-16T00:00:00Z",
+        cancelledReason: null,
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, "tenants/A/waitlist/waitlistGhost"), {
+        patientId: "noSuchPatient",
+        patientName: "Ghost Patient",
+        preferredDates: [],
+        notes: "",
+        addedAt: "2026-01-16T00:00:00Z",
+        addedByUid: "receptionistA",
+        status: "waiting",
       })
     );
   });
