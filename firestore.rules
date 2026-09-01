@@ -26,6 +26,48 @@ service cloud.firestore {
       return belongsToTenant(clinicId) && request.auth.token.role == 'owner';
     }
 
+    function isReceptionistOfTenant(clinicId) {
+      return belongsToTenant(clinicId) && request.auth.token.role == 'receptionist';
+    }
+
+    function isAssistantOfTenant(clinicId) {
+      return belongsToTenant(clinicId) && request.auth.token.role == 'assistant';
+    }
+
+    // Explicit, spelled-out exclusion (not just relying on the default deny) so the
+    // intent reads clearly: Lab Coordinator has zero access to the patient-records
+    // module, full stop - the same as any other role that isn't owner/receptionist/
+    // assistant, but called out because it's the one role a reviewer might otherwise
+    // assume falls under "any staff member of the tenant".
+    function isLabCoordinatorOfTenant(clinicId) {
+      return belongsToTenant(clinicId) && request.auth.token.role == 'labCoordinator';
+    }
+
+    // Patient records are clinical/PII data - deliberately not extended to platform
+    // admins the way tenants/staff read access is. No cross-tenant support visibility
+    // into patient data in this phase.
+    function canReadPatientRecords(clinicId) {
+      return (isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId) ||
+        isAssistantOfTenant(clinicId)) && !isLabCoordinatorOfTenant(clinicId);
+    }
+
+    // Fields only clinical staff (owner/assistant) may set - a receptionist's write
+    // must never touch these, on create or update.
+    function clinicalFields() {
+      return ['allergies', 'chronicConditions', 'currentMedications', 'medicalHistoryNotes'];
+    }
+
+    // Demographic/contact fields that stay receptionist/owner territory - an
+    // assistant's write must never touch these.
+    function demographicFields() {
+      return ['name', 'dob', 'gender', 'phone', 'email', 'address',
+        'emergencyContactName', 'emergencyContactPhone', 'bloodGroup'];
+    }
+
+    function touchesNoneOf(fieldList) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fieldList);
+    }
+
     // Only a platform admin may read/write their own admin doc. This collection is
     // intentionally separate from the clinic signup/invite flow - nothing here ever
     // grants platformAdmin; only the onPlatformAdminWrite Cloud Function's trigger
@@ -59,6 +101,47 @@ service cloud.firestore {
       match /auditLog/{logId} {
         allow read: if isOwnerOfTenant(clinicId);
         allow write: if false;
+      }
+
+      // Phase 2a - patient records, EDR, and DPDP consent capture.
+      match /patients/{patientId} {
+        allow read: if canReadPatientRecords(clinicId);
+
+        // Only owner/receptionist create patients. A receptionist-authored create
+        // may not seed any clinical field - those start empty and are added later
+        // by an assistant/owner.
+        allow create: if isOwnerOfTenant(clinicId) ||
+          (isReceptionistOfTenant(clinicId) &&
+            !request.resource.data.keys().hasAny(clinicalFields()));
+
+        allow update: if isOwnerOfTenant(clinicId) ||
+          (isReceptionistOfTenant(clinicId) && touchesNoneOf(clinicalFields())) ||
+          (isAssistantOfTenant(clinicId) && touchesNoneOf(demographicFields()));
+
+        // Only the owner deletes a patient record - not part of this phase's UI,
+        // but the rule shouldn't be laxer than what's actually offered.
+        allow delete: if isOwnerOfTenant(clinicId);
+
+        // Consents are separate, revocable, queryable facts (see README) - owner and
+        // receptionist (who runs the intake flow) capture them; assistant gets the
+        // same read access as the rest of the record but doesn't record consent.
+        match /consents/{consentType} {
+          allow read: if canReadPatientRecords(clinicId);
+          allow write: if isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId);
+        }
+
+        // Signed intake form snapshots - same write access as consents.
+        match /intakeForms/{formId} {
+          allow read: if canReadPatientRecords(clinicId);
+          allow write: if isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId);
+        }
+      }
+
+      // DPDP access/correction/erasure request log. Owner-only, full stop - this
+      // phase only logs and tracks the request, so there's no reason for anyone
+      // else to see or touch it yet.
+      match /dataRequests/{requestId} {
+        allow read, write: if isOwnerOfTenant(clinicId);
       }
     }
 
