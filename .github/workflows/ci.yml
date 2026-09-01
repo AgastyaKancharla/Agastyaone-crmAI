@@ -56,3 +56,36 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+  rules-test:
+    name: Firestore rules tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        # The Firestore emulator itself runs on the JVM.
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: firestore-tests/package-lock.json
+
+      - name: Install test dependencies
+        working-directory: firestore-tests
+        run: npm ci
+
+      - name: Run rules tests against the Firestore emulator
+        # No live Firebase project needed - "demo-*" project IDs are handled
+        # entirely by the emulator.
+        run: |
+          npx --yes firebase-tools@latest emulators:exec \
+            --project demo-agastyaone-rules-test \
+            --only firestore \
+            "npm --prefix firestore-tests run test"
