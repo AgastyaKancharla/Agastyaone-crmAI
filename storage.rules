@@ -1,10 +1,53 @@
 rules_version = '2';
 
-// Phase 1 has no file upload features yet (that lands with Clinical/Patient Docs in a
-// later phase). Deny everything until a concrete need defines a scoped, tenant-aware
-// path and rule.
+// Phase 2a adds one concrete need: signature images captured during the digital
+// intake flow. Everything else stays denied until a phase defines its own scoped,
+// tenant-aware path.
 service firebase.storage {
   match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function belongsToTenant(clinicId) {
+      return isSignedIn() && request.auth.token.clinicId == clinicId;
+    }
+
+    function isOwnerOfTenant(clinicId) {
+      return belongsToTenant(clinicId) && request.auth.token.role == 'owner';
+    }
+
+    function isReceptionistOfTenant(clinicId) {
+      return belongsToTenant(clinicId) && request.auth.token.role == 'receptionist';
+    }
+
+    function isAssistantOfTenant(clinicId) {
+      return belongsToTenant(clinicId) && request.auth.token.role == 'assistant';
+    }
+
+    // Same access shape as the matching Firestore consents/intakeForms rules: owner
+    // and receptionist (who run the intake flow) write, owner/receptionist/assistant
+    // read, Lab Coordinator has no access - it's simply absent from this list.
+    function canReadPatientFiles(clinicId) {
+      return isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId) ||
+        isAssistantOfTenant(clinicId);
+    }
+
+    function canWritePatientFiles(clinicId) {
+      return isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId);
+    }
+
+    function isReasonablySizedImage() {
+      return request.resource.size < 5 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
+    }
+
+    match /tenants/{clinicId}/patients/{patientId}/signatures/{fileName} {
+      allow read: if canReadPatientFiles(clinicId);
+      allow write: if canWritePatientFiles(clinicId) && isReasonablySizedImage();
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
