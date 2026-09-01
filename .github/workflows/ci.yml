@@ -63,12 +63,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        # The Firestore emulator itself runs on the JVM.
+      - name: Set up JDK 21
+        # The Firestore emulator runs on the JVM, and current firebase-tools
+        # requires Java 21+ to run at all (older JDKs fail outright).
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
