@@ -149,3 +149,113 @@ describe("imaging storage - X-ray/photo files", () => {
     );
   });
 });
+
+const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]);
+const PDF_METADATA = { contentType: "application/pdf" };
+
+/** Seeds a PDF document with the Admin SDK's privileges, bypassing the rules under test. */
+async function seedDocument(path: string): Promise<void> {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await uploadBytes(ref(context.storage(), path), PDF_BYTES, PDF_METADATA);
+  });
+}
+
+describe("insurance claim storage - TPA claim documents", () => {
+  it("lets the owner and the receptionist upload (image or PDF) and read a claim document", async () => {
+    const ownerStorage = ownerAContext().storage();
+    const receptionistStorage = receptionistAContext().storage();
+
+    await assertSucceeds(
+      uploadBytes(
+        ref(receptionistStorage, "tenants/A/patients/patientA1/insuranceClaims/claimA1/form.pdf"),
+        PDF_BYTES,
+        PDF_METADATA,
+      ),
+    );
+    await assertSucceeds(
+      getBytes(ref(ownerStorage, "tenants/A/patients/patientA1/insuranceClaims/claimA1/form.pdf")),
+    );
+    await assertSucceeds(
+      uploadBytes(
+        ref(ownerStorage, "tenants/A/patients/patientA1/insuranceClaims/claimA1/scan.jpg"),
+        IMAGE_BYTES,
+        IMAGE_METADATA,
+      ),
+    );
+  });
+
+  it("rejects an oversized or non-image/non-PDF claim document upload", async () => {
+    const ownerStorage = ownerAContext().storage();
+
+    await assertFails(
+      uploadBytes(
+        ref(ownerStorage, "tenants/A/patients/patientA1/insuranceClaims/claimA1/notADocument.txt"),
+        IMAGE_BYTES,
+        { contentType: "text/plain" },
+      ),
+    );
+    await assertFails(
+      uploadBytes(
+        ref(ownerStorage, "tenants/A/patients/patientA1/insuranceClaims/claimA1/tooBig.pdf"),
+        new Uint8Array(11 * 1024 * 1024),
+        PDF_METADATA,
+      ),
+    );
+  });
+
+  it("CORE: rejects the assistant's read AND write of claim documents outright", async () => {
+    await seedDocument("tenants/A/patients/patientA1/insuranceClaims/claimA1/form.pdf");
+    const db = assistantAContext().storage();
+
+    await assertFails(getBytes(ref(db, "tenants/A/patients/patientA1/insuranceClaims/claimA1/form.pdf")));
+    await assertFails(
+      uploadBytes(
+        ref(db, "tenants/A/patients/patientA1/insuranceClaims/claimA1/other.pdf"),
+        PDF_BYTES,
+        PDF_METADATA,
+      ),
+    );
+  });
+
+  it("CORE: rejects the Lab Coordinator's read AND write of claim documents outright", async () => {
+    await seedDocument("tenants/A/patients/patientA1/insuranceClaims/claimA1/form.pdf");
+    const db = labCoordinatorAContext().storage();
+
+    await assertFails(getBytes(ref(db, "tenants/A/patients/patientA1/insuranceClaims/claimA1/form.pdf")));
+    await assertFails(
+      uploadBytes(
+        ref(db, "tenants/A/patients/patientA1/insuranceClaims/claimA1/other.pdf"),
+        PDF_BYTES,
+        PDF_METADATA,
+      ),
+    );
+  });
+
+  it("CORE: denies clinic A staff any read or write of clinic B's claim documents, even knowing the storage path", async () => {
+    await seedDocument("tenants/B/patients/patientB1/insuranceClaims/claimB1/form.pdf");
+    const db = ownerAContext().storage();
+
+    await assertFails(getBytes(ref(db, "tenants/B/patients/patientB1/insuranceClaims/claimB1/form.pdf")));
+    await assertFails(
+      uploadBytes(
+        ref(db, "tenants/B/patients/patientB1/insuranceClaims/claimB1/other.pdf"),
+        PDF_BYTES,
+        PDF_METADATA,
+      ),
+    );
+  });
+
+  it("denies unauthenticated access to a claim document, even knowing the storage path", async () => {
+    await seedDocument("tenants/A/patients/patientA1/insuranceClaims/claimA1/form.pdf");
+    const db = testEnv.unauthenticatedContext().storage();
+
+    await assertFails(getBytes(ref(db, "tenants/A/patients/patientA1/insuranceClaims/claimA1/form.pdf")));
+    await assertFails(
+      uploadBytes(
+        ref(db, "tenants/A/patients/patientA1/insuranceClaims/claimA1/other.pdf"),
+        PDF_BYTES,
+        PDF_METADATA,
+      ),
+    );
+  });
+});

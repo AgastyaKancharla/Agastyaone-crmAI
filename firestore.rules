@@ -88,6 +88,12 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/tenants/$(clinicId)/patients/$(patientId));
     }
 
+    // Phase 4c - an insurance claim must point at a real invoice in this tenant,
+    // same reasoning as patientExists() above.
+    function invoiceExists(clinicId, invoiceId) {
+      return exists(/databases/$(database)/documents/tenants/$(clinicId)/invoices/$(invoiceId));
+    }
+
     // An appointment's end must be after its start, on every write - not just create,
     // since a reschedule (update) can just as easily submit a reversed pair. Compared
     // directly (not type-checked as `timestamp`) since the two sides just need to be
@@ -295,6 +301,25 @@ service cloud.firestore {
 
         allow update: if (isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId)) &&
           patientExists(clinicId, request.resource.data.patientId);
+
+        allow delete: if isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId);
+      }
+
+      // Phase 4c - insurance/TPA claim tracking, closing out Billing & Financial
+      // Management. Same access shape as invoices above (a financial/administrative
+      // matter, not clinical): owner/receptionist full CRUD, clean full exclusion for
+      // assistant/labCoordinator. A claim must reference both a real patient and a
+      // real invoice in this tenant.
+      match /insuranceClaims/{claimId} {
+        allow read: if isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId);
+
+        allow create: if (isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId)) &&
+          patientExists(clinicId, request.resource.data.patientId) &&
+          invoiceExists(clinicId, request.resource.data.invoiceId);
+
+        allow update: if (isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId)) &&
+          patientExists(clinicId, request.resource.data.patientId) &&
+          invoiceExists(clinicId, request.resource.data.invoiceId);
 
         allow delete: if isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId);
       }
