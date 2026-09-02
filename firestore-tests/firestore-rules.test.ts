@@ -15,7 +15,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { deleteDoc, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { afterAll, afterEach, beforeAll, describe, it } from "vitest";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -178,6 +178,24 @@ async function seedFixtures(): Promise<void> {
       totalEstimate: 0,
       patientApprovalSignatureUrl: null,
       patientApprovedAt: null,
+    });
+    await setDoc(doc(db, "tenants/A/imaging/imagingA1"), {
+      patientId: "patientA1",
+      toothNumber: "11",
+      type: "RVG",
+      storageUrl: "https://example.com/imagingA1.jpg",
+      capturedAt: "2026-02-01T00:00:00Z",
+      uploadedByUid: "assistantA",
+      notes: null,
+    });
+    await setDoc(doc(db, "tenants/B/imaging/imagingB1"), {
+      patientId: "patientB1",
+      toothNumber: null,
+      type: "OPG",
+      storageUrl: "https://example.com/imagingB1.jpg",
+      capturedAt: "2026-02-01T00:00:00Z",
+      uploadedByUid: "ownerB",
+      notes: null,
     });
     await setDoc(doc(db, "platformAdmins/adminX"), {
       name: "Admin X",
@@ -722,5 +740,90 @@ describe("charting - odontogram & periodontal", () => {
     await assertFails(updateDoc(doc(db, "tenants/B/chartings/chartingB1"), { toothConditions: {} }));
     await assertFails(getDoc(doc(db, "tenants/B/treatmentPlans/planB1")));
     await assertFails(updateDoc(doc(db, "tenants/B/treatmentPlans/planB1"), { status: "proposed" }));
+  });
+});
+
+describe("imaging - X-ray/photo metadata", () => {
+  it("lets the owner and the assistant create, read, and update (tag) an imaging record", async () => {
+    await seedFixtures();
+    const ownerDb = ownerAContext().firestore();
+    const assistantDb = assistantAContext().firestore();
+
+    await assertSucceeds(
+      setDoc(doc(assistantDb, "tenants/A/imaging/imagingA2"), {
+        patientId: "patientA1",
+        toothNumber: "21",
+        type: "intraoralPhoto",
+        storageUrl: "https://example.com/imagingA2.jpg",
+        capturedAt: "2026-02-02T00:00:00Z",
+        uploadedByUid: "assistantA",
+        notes: null,
+      })
+    );
+    await assertSucceeds(getDoc(doc(ownerDb, "tenants/A/imaging/imagingA1")));
+    await assertSucceeds(updateDoc(doc(assistantDb, "tenants/A/imaging/imagingA1"), { notes: "Retake next visit" }));
+    await assertSucceeds(updateDoc(doc(ownerDb, "tenants/A/imaging/imagingA1"), { type: "CBCT" }));
+  });
+
+  it("CORE: rejects the assistant's delete of an imaging record, but the owner's delete succeeds", async () => {
+    await seedFixtures();
+    const assistantDb = assistantAContext().firestore();
+    const ownerDb = ownerAContext().firestore();
+
+    await assertFails(deleteDoc(doc(assistantDb, "tenants/A/imaging/imagingA1")));
+    await assertSucceeds(deleteDoc(doc(ownerDb, "tenants/A/imaging/imagingA1")));
+  });
+
+  it("CORE: rejects the receptionist's read and write of imaging records outright", async () => {
+    await seedFixtures();
+    const db = receptionistAContext().firestore();
+
+    await assertFails(getDoc(doc(db, "tenants/A/imaging/imagingA1")));
+    await assertFails(updateDoc(doc(db, "tenants/A/imaging/imagingA1"), { notes: "sneaked in" }));
+    await assertFails(
+      setDoc(doc(db, "tenants/A/imaging/imagingGhost"), {
+        patientId: "patientA1",
+        toothNumber: null,
+        type: "RVG",
+        storageUrl: "https://example.com/ghost.jpg",
+        capturedAt: "2026-02-02T00:00:00Z",
+        uploadedByUid: "receptionistA",
+        notes: null,
+      })
+    );
+  });
+
+  it("CORE: rejects the Lab Coordinator's read and write of imaging records outright", async () => {
+    await seedFixtures();
+    const db = labCoordinatorAContext().firestore();
+
+    await assertFails(getDoc(doc(db, "tenants/A/imaging/imagingA1")));
+    await assertFails(updateDoc(doc(db, "tenants/A/imaging/imagingA1"), { notes: "sneaked in" }));
+  });
+
+  it("CORE: denies clinic A staff any read or write of clinic B's imaging records", async () => {
+    await seedFixtures();
+    const db = ownerAContext().firestore();
+
+    await assertFails(getDoc(doc(db, "tenants/B/imaging/imagingB1")));
+    await assertFails(updateDoc(doc(db, "tenants/B/imaging/imagingB1"), { notes: "sneaked in" }));
+    await assertFails(deleteDoc(doc(db, "tenants/B/imaging/imagingB1")));
+  });
+
+  it("rejects an imaging record that references a patientId not in this tenant", async () => {
+    await seedFixtures();
+    const db = ownerAContext().firestore();
+
+    await assertFails(
+      setDoc(doc(db, "tenants/A/imaging/imagingGhost"), {
+        patientId: "noSuchPatient",
+        toothNumber: null,
+        type: "RVG",
+        storageUrl: "https://example.com/ghost.jpg",
+        capturedAt: "2026-02-02T00:00:00Z",
+        uploadedByUid: "ownerA",
+        notes: null,
+      })
+    );
   });
 });

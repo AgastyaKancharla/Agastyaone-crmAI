@@ -178,3 +178,22 @@ Hidden tiles are absent from the grid, not just disabled.
 > this ever feeds a real invoice (a later phase), the clinic's own accountant must verify
 > and map every procedure to its correct HSN/SAC code and tax rate. Treating the seed list
 > as billing-ready as-is would be a compliance mistake.
+
+## Phase 3b — X-ray & imaging
+
+- **Imaging** (`tenants/{clinicId}/imaging`): owner/dentist and assistant/hygienist can
+  upload and tag (tooth number, type, notes); only the owner/dentist can delete a record,
+  same real-world split as periodontal charting in Phase 3a. Receptionist and Lab
+  Coordinator have no Firestore or Storage access at all - not even to a raw file URL, since
+  Storage rules (`tenants/{clinicId}/patients/{patientId}/imaging/...`) mirror the same
+  role/tenant restrictions as the Firestore document.
+- **Format scope**: JPEG/PNG only (camera capture and gallery/Photo Picker selection).
+  **DICOM is an explicit stretch goal, not built in this phase** - CBCT/RVG/OPG hardware
+  that exports DICOM natively would need a separate ingestion and viewer path (windowing,
+  multi-frame series) that this phase's simple image pipeline doesn't attempt.
+- **Before/after comparison**: side-by-side view of any two images with independent
+  pinch-zoom per pane. A slider/overlay comparison mode was considered and deliberately
+  left out - side-by-side is the spec's minimum bar, and overlay alignment (registration
+  between two photos taken at different times/angles) is a meaningfully bigger feature than
+  this phase's scope.
+- This closes out **Core Clinical Tools**. Next module: **Billing & Financial Management**.

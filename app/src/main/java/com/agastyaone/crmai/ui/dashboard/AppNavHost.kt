@@ -21,6 +21,9 @@ import com.agastyaone.crmai.ui.charting.ChartingListScreen
 import com.agastyaone.crmai.ui.charting.TreatmentPlanApprovalScreen
 import com.agastyaone.crmai.ui.charting.TreatmentPlanBuilderScreen
 import com.agastyaone.crmai.ui.charting.TreatmentPlanListScreen
+import com.agastyaone.crmai.ui.imaging.ImageComparisonScreen
+import com.agastyaone.crmai.ui.imaging.ImageGalleryScreen
+import com.agastyaone.crmai.ui.imaging.ImageUploadScreen
 import com.agastyaone.crmai.ui.patients.DataRequestsScreen
 import com.agastyaone.crmai.ui.patients.IntakeFlowScreen
 import com.agastyaone.crmai.ui.patients.PatientClinicalEditScreen
@@ -55,6 +58,12 @@ private const val ROUTE_TREATMENT_PLAN_LIST = "patients/{$ARG_PATIENT_ID}/treatm
 private const val ROUTE_TREATMENT_PLAN_BUILDER = "patients/{$ARG_PATIENT_ID}/treatmentPlans/new"
 private const val ARG_PLAN_ID = "planId"
 private const val ROUTE_TREATMENT_PLAN_APPROVAL = "patients/{$ARG_PATIENT_ID}/treatmentPlans/{$ARG_PLAN_ID}"
+private const val ROUTE_IMAGING_GALLERY = "patients/{$ARG_PATIENT_ID}/imaging"
+private const val ROUTE_IMAGING_UPLOAD = "patients/{$ARG_PATIENT_ID}/imaging/add"
+private const val ARG_IMAGE_ID_A = "imageIdA"
+private const val ARG_IMAGE_ID_B = "imageIdB"
+private const val ROUTE_IMAGING_COMPARE =
+    "patients/{$ARG_PATIENT_ID}/imaging/compare/{$ARG_IMAGE_ID_A}/{$ARG_IMAGE_ID_B}"
 
 private fun patientDetailRoute(patientId: String) = "patients/$patientId"
 private fun patientEditDemographicsRoute(patientId: String) = "patients/$patientId/editDemographics"
@@ -66,6 +75,10 @@ private fun chartingDetailRoute(chartingId: String) = "chartings/$chartingId"
 private fun treatmentPlanListRoute(patientId: String) = "patients/$patientId/treatmentPlans"
 private fun treatmentPlanBuilderRoute(patientId: String) = "patients/$patientId/treatmentPlans/new"
 private fun treatmentPlanApprovalRoute(patientId: String, planId: String) = "patients/$patientId/treatmentPlans/$planId"
+private fun imagingGalleryRoute(patientId: String) = "patients/$patientId/imaging"
+private fun imagingUploadRoute(patientId: String) = "patients/$patientId/imaging/add"
+private fun imagingCompareRoute(patientId: String, imageIdA: String, imageIdB: String) =
+    "patients/$patientId/imaging/compare/$imageIdA/$imageIdB"
 
 /** Everything reachable once the signed-in user has a resolved clinic role. */
 @Composable
@@ -136,6 +149,7 @@ fun AppNavHost(session: SessionState.Staff, onSignOut: () -> Unit) {
                 onStartIntake = { navController.navigate(patientIntakeRoute(patientId)) },
                 onOpenChartings = { navController.navigate(chartingListRoute(patientId)) },
                 onOpenTreatmentPlans = { navController.navigate(treatmentPlanListRoute(patientId)) },
+                onOpenImaging = { navController.navigate(imagingGalleryRoute(patientId)) },
             )
         }
         composable(
@@ -300,6 +314,50 @@ fun AppNavHost(session: SessionState.Staff, onSignOut: () -> Unit) {
                 onBack = { navController.popBackStack() },
             )
         }
+        composable(
+            ROUTE_IMAGING_GALLERY,
+            arguments = listOf(navArgument(ARG_PATIENT_ID) { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val patientId = backStackEntry.arguments?.getString(ARG_PATIENT_ID).orEmpty()
+            ImageGalleryScreen(
+                clinicId = clinicId,
+                role = session.role,
+                patientId = patientId,
+                onAddImage = { navController.navigate(imagingUploadRoute(patientId)) },
+                onCompare = { before, after ->
+                    navController.navigate(imagingCompareRoute(patientId, before.id, after.id))
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            ROUTE_IMAGING_UPLOAD,
+            arguments = listOf(navArgument(ARG_PATIENT_ID) { type = NavType.StringType }),
+        ) { backStackEntry ->
+            ImageUploadScreen(
+                clinicId = clinicId,
+                uid = uid,
+                patientId = backStackEntry.arguments?.getString(ARG_PATIENT_ID).orEmpty(),
+                onUploaded = { navController.popBackStack() },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            ROUTE_IMAGING_COMPARE,
+            arguments = listOf(
+                navArgument(ARG_PATIENT_ID) { type = NavType.StringType },
+                navArgument(ARG_IMAGE_ID_A) { type = NavType.StringType },
+                navArgument(ARG_IMAGE_ID_B) { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            ImageComparisonRoute(
+                clinicId = clinicId,
+                patientId = backStackEntry.arguments?.getString(ARG_PATIENT_ID).orEmpty(),
+                imageIdA = backStackEntry.arguments?.getString(ARG_IMAGE_ID_A).orEmpty(),
+                imageIdB = backStackEntry.arguments?.getString(ARG_IMAGE_ID_B).orEmpty(),
+                onBack = { navController.popBackStack() },
+            )
+        }
     }
 }
 
@@ -329,5 +387,34 @@ private fun EditDemographicsRoute(
             onSaved = onSaved,
             onBack = onBack,
         )
+    }
+}
+
+/**
+ * Comparison nav args carry two image IDs, not the [com.agastyaone.crmai.data.imaging.ImagingRecord]s
+ * themselves (nav args are string-only) - re-observes the patient's imaging list and picks
+ * the two matching entries out of it, same "re-fetch by ID from the route" shape as
+ * [EditDemographicsRoute] above.
+ */
+@Composable
+private fun ImageComparisonRoute(
+    clinicId: String,
+    patientId: String,
+    imageIdA: String,
+    imageIdB: String,
+    onBack: () -> Unit,
+) {
+    val images by ServiceLocator.imagingRepository
+        .observeImagingForPatient(clinicId, patientId)
+        .collectAsState(initial = emptyList())
+    val before = images.firstOrNull { it.id == imageIdA }
+    val after = images.firstOrNull { it.id == imageIdB }
+
+    if (before == null || after == null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+    } else {
+        ImageComparisonScreen(before = before, after = after, onBack = onBack)
     }
 }

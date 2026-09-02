@@ -80,6 +80,12 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
+    // Phase 3b - the imaging gallery/comparison screens need to load both a locally
+    // picked/captured Uri (upload preview) and a remote Firebase Storage download URL
+    // (gallery, before/after) through the same API; nothing in this app has needed an
+    // image loader before now.
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 

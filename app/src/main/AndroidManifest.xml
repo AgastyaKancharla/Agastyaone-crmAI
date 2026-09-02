@@ -22,6 +22,19 @@
             </intent-filter>
         </activity>
 
+        <!-- Phase 3b - hands a content:// Uri to the system camera app for
+             ActivityResultContracts.TakePicture() to write a full-res photo into,
+             without granting the camera app broader file access than that one path. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
     </application>
 
 </manifest>

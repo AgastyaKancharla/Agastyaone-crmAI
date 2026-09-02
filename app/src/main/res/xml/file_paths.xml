@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Matches context.cacheDir/imaging/ - where a camera capture is written before
+         upload, per ImageCaptureUtils. Cache, not files/, since it's a throwaway
+         staging copy, not something the app needs to keep around. -->
+    <cache-path name="imaging_captures" path="imaging/" />
+</paths>

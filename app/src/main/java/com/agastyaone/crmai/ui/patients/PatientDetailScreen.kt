@@ -48,6 +48,7 @@ fun PatientDetailScreen(
     onStartIntake: () -> Unit,
     onOpenChartings: () -> Unit,
     onOpenTreatmentPlans: () -> Unit,
+    onOpenImaging: () -> Unit,
 ) {
     val repository = ServiceLocator.patientRepository
     val patient by repository.observePatient(clinicId, patientId).collectAsState(initial = null)
@@ -150,6 +151,12 @@ fun PatientDetailScreen(
                     }
                     OutlinedButton(onClick = onOpenTreatmentPlans, modifier = Modifier.fillMaxWidth()) {
                         Text("Treatment plans")
+                    }
+                    // Phase 3b - X-ray/imaging. Same owner/assistant gating as chartings above;
+                    // Receptionist and Lab Coordinator have no Firestore or Storage access to
+                    // imaging at all, so the button stays hidden for them.
+                    OutlinedButton(onClick = onOpenImaging, modifier = Modifier.fillMaxWidth()) {
+                        Text("X-rays & imaging")
                     }
                 }
             }
