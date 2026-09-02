@@ -197,6 +197,51 @@ async function seedFixtures(): Promise<void> {
       uploadedByUid: "ownerB",
       notes: null,
     });
+    await setDoc(doc(db, "tenants/A/invoices/invoiceA1"), {
+      patientId: "patientA1",
+      invoiceNumber: "INV-0001",
+      issuedAt: "2026-02-05T00:00:00Z",
+      issuedByUid: "receptionistA",
+      lineItems: [
+        {
+          procedureCode: "SCALING",
+          procedureName: "Scaling & Polishing",
+          hsnSacCode: "999319",
+          quantity: 1,
+          unitCost: 1500,
+          lineTotal: 1500,
+        },
+      ],
+      billingState: "Karnataka",
+      subtotal: 1500,
+      cgst: 135,
+      sgst: 135,
+      igst: 0,
+      total: 1770,
+      paymentStatus: "unpaid",
+      amountPaid: 0,
+      razorpayPaymentLinkId: null,
+      razorpayStatus: null,
+      treatmentPlanId: null,
+    });
+    await setDoc(doc(db, "tenants/B/invoices/invoiceB1"), {
+      patientId: "patientB1",
+      invoiceNumber: "INV-0001",
+      issuedAt: "2026-02-05T00:00:00Z",
+      issuedByUid: "ownerB",
+      lineItems: [],
+      billingState: "Tamil Nadu",
+      subtotal: 0,
+      cgst: 0,
+      sgst: 0,
+      igst: 0,
+      total: 0,
+      paymentStatus: "unpaid",
+      amountPaid: 0,
+      razorpayPaymentLinkId: null,
+      razorpayStatus: null,
+      treatmentPlanId: null,
+    });
     await setDoc(doc(db, "platformAdmins/adminX"), {
       name: "Admin X",
       email: "adminx@agastyaone.com",
@@ -278,6 +323,16 @@ describe("role-based access within a tenant", () => {
         name: "Another Hire",
       })
     );
+  });
+
+  it("CORE: lets the receptionist bump only the invoiceCounter field on the tenant doc, nothing else", async () => {
+    await seedFixtures();
+    const db = receptionistAContext().firestore();
+    const tenantRef = doc(db, "tenants/A");
+
+    await assertSucceeds(updateDoc(tenantRef, { invoiceCounter: 1 }));
+    await assertFails(updateDoc(tenantRef, { invoiceCounter: 2, clinicName: "Hacked via counter" }));
+    await assertFails(updateDoc(tenantRef, { gstin: "FAKEGSTIN" }));
   });
 });
 
@@ -824,6 +879,95 @@ describe("imaging - X-ray/photo metadata", () => {
         uploadedByUid: "ownerA",
         notes: null,
       })
+    );
+  });
+});
+
+describe("invoices - GST billing", () => {
+  function invoicePayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      patientId: "patientA1",
+      invoiceNumber: "INV-0002",
+      issuedAt: "2026-02-06T00:00:00Z",
+      issuedByUid: "receptionistA",
+      lineItems: [],
+      billingState: "Karnataka",
+      subtotal: 0,
+      cgst: 0,
+      sgst: 0,
+      igst: 0,
+      total: 0,
+      paymentStatus: "unpaid",
+      amountPaid: 0,
+      razorpayPaymentLinkId: null,
+      razorpayStatus: null,
+      treatmentPlanId: null,
+      ...overrides,
+    };
+  }
+
+  it("lets the owner and the receptionist create, read, and update an invoice", async () => {
+    await seedFixtures();
+    const ownerDb = ownerAContext().firestore();
+    const receptionistDb = receptionistAContext().firestore();
+
+    await assertSucceeds(
+      setDoc(doc(receptionistDb, "tenants/A/invoices/invoiceA2"), invoicePayload())
+    );
+    await assertSucceeds(getDoc(doc(ownerDb, "tenants/A/invoices/invoiceA1")));
+    await assertSucceeds(
+      updateDoc(doc(receptionistDb, "tenants/A/invoices/invoiceA1"), { paymentStatus: "partial", amountPaid: 500 })
+    );
+    await assertSucceeds(
+      updateDoc(doc(ownerDb, "tenants/A/invoices/invoiceA1"), { paymentStatus: "paid", amountPaid: 1770 })
+    );
+  });
+
+  it("lets the owner and the receptionist void (delete) an invoice", async () => {
+    await seedFixtures();
+    const ownerDb = ownerAContext().firestore();
+    const receptionistDb = receptionistAContext().firestore();
+
+    await assertSucceeds(
+      setDoc(doc(receptionistDb, "tenants/A/invoices/invoiceToVoid"), invoicePayload())
+    );
+    await assertSucceeds(deleteDoc(doc(ownerDb, "tenants/A/invoices/invoiceToVoid")));
+  });
+
+  it("CORE: rejects the assistant's read AND write of invoices outright - a clean full exclusion, not a partial one", async () => {
+    await seedFixtures();
+    const db = assistantAContext().firestore();
+
+    await assertFails(getDoc(doc(db, "tenants/A/invoices/invoiceA1")));
+    await assertFails(updateDoc(doc(db, "tenants/A/invoices/invoiceA1"), { paymentStatus: "paid" }));
+    await assertFails(setDoc(doc(db, "tenants/A/invoices/invoiceGhost"), invoicePayload()));
+    await assertFails(deleteDoc(doc(db, "tenants/A/invoices/invoiceA1")));
+  });
+
+  it("CORE: rejects the Lab Coordinator's read AND write of invoices outright", async () => {
+    await seedFixtures();
+    const db = labCoordinatorAContext().firestore();
+
+    await assertFails(getDoc(doc(db, "tenants/A/invoices/invoiceA1")));
+    await assertFails(updateDoc(doc(db, "tenants/A/invoices/invoiceA1"), { paymentStatus: "paid" }));
+    await assertFails(setDoc(doc(db, "tenants/A/invoices/invoiceGhost"), invoicePayload()));
+  });
+
+  it("CORE: denies clinic A staff any read or write of clinic B's invoices", async () => {
+    await seedFixtures();
+    const db = ownerAContext().firestore();
+
+    await assertFails(getDoc(doc(db, "tenants/B/invoices/invoiceB1")));
+    await assertFails(updateDoc(doc(db, "tenants/B/invoices/invoiceB1"), { paymentStatus: "paid" }));
+    await assertFails(deleteDoc(doc(db, "tenants/B/invoices/invoiceB1")));
+  });
+
+  it("rejects an invoice that references a patientId not in this tenant", async () => {
+    await seedFixtures();
+    const db = ownerAContext().firestore();
+
+    await assertFails(
+      setDoc(doc(db, "tenants/A/invoices/invoiceGhost"), invoicePayload({ patientId: "noSuchPatient" }))
     );
   });
 });

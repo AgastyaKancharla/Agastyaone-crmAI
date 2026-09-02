@@ -197,3 +197,39 @@ Hidden tiles are absent from the grid, not just disabled.
   between two photos taken at different times/angles) is a meaningfully bigger feature than
   this phase's scope.
 - This closes out **Core Clinical Tools**. Next module: **Billing & Financial Management**.
+
+## Phase 4a — GST invoicing
+
+- **Invoices** (`tenants/{clinicId}/invoices`): owner/dentist and receptionist have full
+  access (create, edit, void, record payments) - the spec is explicit that billing is a
+  receptionist-level duty here, same as the owner. Assistant/hygienist and Lab Coordinator
+  get a **clean full exclusion**: no partial-field carve-out like the clinical modules,
+  both their read and write are rejected outright.
+- **Sequential invoice numbers** (`INV-0001`, `INV-0002`, ...) are assigned inside the same
+  Firestore transaction that creates the invoice, bumping an `invoiceCounter` field on the
+  tenant doc - race-safe under concurrent staff members, unlike a naive "count existing
+  invoices + 1". firestore.rules gives the receptionist a narrow, field-scoped allowance
+  (`touchesOnly(['invoiceCounter'])`) to touch just that one field on the otherwise
+  owner-only tenant document.
+- **GST split**: same state as the clinic's own `tenants/{clinicId}.state` → CGST + SGST
+  (each half the total rate); different state → IGST, full rate. Most patients are local to
+  the clinic, so `billingState` simply defaults to the clinic's state and is editable per
+  invoice, rather than building a full address-collection flow.
+- **⚠️ HSN/SAC codes and GST rate are placeholders, not verified for filing**:
+  `ProcedureCatalog.Procedure.hsnSacCode` defaults every seed procedure to SAC 999319
+  ("Other human health services") as a stand-in, and the GST calculation uses an 18%
+  placeholder rate (`DEFAULT_GST_RATE_PERCENT`) since the spec doesn't name a rate and many
+  dental/medical services are actually GST-exempt under Indian law. Both are flagged here,
+  in the `ProcedureCatalog` doc comment, and as a footnote printed on every generated
+  invoice PDF - the clinic's own accountant must confirm the correct code and rate per
+  procedure before this is used for real GST filing.
+- **PDF + sharing**: a real, single-page PDF is rendered with `android.graphics.pdf.PdfDocument`
+  (part of the Android SDK, no new dependency) and handed to the standard Android share
+  sheet (`Intent.ACTION_SEND`) - WhatsApp, email, Drive etc. all show up there naturally.
+  This is explicitly *not* the Meta Cloud API WhatsApp integration (a later
+  Communication & Automation phase); staff tap send manually from the share sheet.
+- Payment status (`unpaid` / `partial` / `paid`) and `amountPaid` are recorded manually,
+  independent of Phase 4b's future Razorpay integration - most patients still pay by cash
+  or card in person.
+- Razorpay payment links (Phase 4b) and insurance/TPA claims (Phase 4c) are explicitly out
+  of scope for this phase.

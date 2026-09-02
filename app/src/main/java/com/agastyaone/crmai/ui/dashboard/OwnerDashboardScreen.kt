@@ -9,6 +9,7 @@ fun OwnerDashboardScreen(
     onOpenPatients: () -> Unit,
     onOpenDataRequests: () -> Unit,
     onOpenSchedule: () -> Unit,
+    onOpenBilling: () -> Unit,
 ) {
     DashboardScaffold(
         title = "Clinic dashboard",
@@ -17,7 +18,7 @@ fun OwnerDashboardScreen(
             DashboardTile("Schedule", onClick = onOpenSchedule),
             DashboardTile("Patients", onClick = onOpenPatients),
             DashboardTile("Clinical"),
-            DashboardTile("Billing"),
+            DashboardTile("Billing", onClick = onOpenBilling),
             DashboardTile("Reports"),
             DashboardTile("Inventory"),
             DashboardTile("Lab"),

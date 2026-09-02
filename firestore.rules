@@ -68,6 +68,14 @@ service cloud.firestore {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fieldList);
     }
 
+    // Phase 4a - the inverse of touchesNoneOf(): every affected key must be in the
+    // allow-list, used to give the receptionist a narrow write onto the otherwise
+    // owner-only tenant doc (just enough to bump the sequential invoice counter, see
+    // below - nothing else on that doc becomes receptionist-writable).
+    function touchesOnly(fieldList) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fieldList);
+    }
+
     // Referential integrity for Phase 2b: an appointment/waitlist entry may only point
     // at a patient that actually exists in this tenant. Enforced here with exists(),
     // not a Cloud Function trigger, because a trigger only runs *after* the write has
@@ -107,7 +115,14 @@ service cloud.firestore {
       // they get no write allowance here by design - clinic data mutation stays with
       // the clinic's own owner and the Cloud Functions, not a blanket admin bypass.
       allow read: if belongsToTenant(clinicId) || isPlatformAdmin();
-      allow write: if isOwnerOfTenant(clinicId);
+
+      // Phase 4a - invoiceCounter (the sequential INV-0001 counter) is bumped inside
+      // the same transaction that creates an invoice, and the receptionist creates
+      // invoices too (see the invoices match block below) - so they need to touch this
+      // one field on an otherwise owner-only document. touchesOnly() keeps every other
+      // field on this doc (clinicName, gstin, state, ...) owner-exclusive as before.
+      allow write: if isOwnerOfTenant(clinicId) ||
+        (isReceptionistOfTenant(clinicId) && touchesOnly(['invoiceCounter']));
 
       match /staff/{staffUid} {
         allow read: if belongsToTenant(clinicId) || isPlatformAdmin();
@@ -263,6 +278,25 @@ service cloud.firestore {
           patientExists(clinicId, request.resource.data.patientId);
 
         allow delete: if isOwnerOfTenant(clinicId);
+      }
+
+      // Phase 4a - GST invoicing. Owner/receptionist have full CRUD - the spec is
+      // explicit that billing (generate/send invoices, record payments) is a
+      // receptionist-level duty here, same as the owner. Assistant/hygienist and Lab
+      // Coordinator get a clean full exclusion: no allow clause mentions them at all,
+      // so both their read and write fail on the default deny below - unlike the
+      // clinical modules' partial-field carve-outs (e.g. imaging/chartings), there is
+      // no "assistant may touch some fields" case in this collection.
+      match /invoices/{invoiceId} {
+        allow read: if isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId);
+
+        allow create: if (isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId)) &&
+          patientExists(clinicId, request.resource.data.patientId);
+
+        allow update: if (isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId)) &&
+          patientExists(clinicId, request.resource.data.patientId);
+
+        allow delete: if isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId);
       }
     }
 

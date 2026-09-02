@@ -21,6 +21,9 @@ import com.agastyaone.crmai.ui.charting.ChartingListScreen
 import com.agastyaone.crmai.ui.charting.TreatmentPlanApprovalScreen
 import com.agastyaone.crmai.ui.charting.TreatmentPlanBuilderScreen
 import com.agastyaone.crmai.ui.charting.TreatmentPlanListScreen
+import com.agastyaone.crmai.ui.billing.InvoiceBuilderScreen
+import com.agastyaone.crmai.ui.billing.InvoiceDetailScreen
+import com.agastyaone.crmai.ui.billing.InvoiceListScreen
 import com.agastyaone.crmai.ui.imaging.ImageComparisonScreen
 import com.agastyaone.crmai.ui.imaging.ImageGalleryScreen
 import com.agastyaone.crmai.ui.imaging.ImageUploadScreen
@@ -64,6 +67,12 @@ private const val ARG_IMAGE_ID_A = "imageIdA"
 private const val ARG_IMAGE_ID_B = "imageIdB"
 private const val ROUTE_IMAGING_COMPARE =
     "patients/{$ARG_PATIENT_ID}/imaging/compare/{$ARG_IMAGE_ID_A}/{$ARG_IMAGE_ID_B}"
+private const val ROUTE_BILLING_LIST = "billing"
+private const val ROUTE_BILLING_NEW = "billing/new"
+private const val ROUTE_PATIENT_INVOICES = "patients/{$ARG_PATIENT_ID}/invoices"
+private const val ROUTE_PATIENT_INVOICE_NEW = "patients/{$ARG_PATIENT_ID}/invoices/new"
+private const val ARG_INVOICE_ID = "invoiceId"
+private const val ROUTE_INVOICE_DETAIL = "invoices/{$ARG_INVOICE_ID}"
 
 private fun patientDetailRoute(patientId: String) = "patients/$patientId"
 private fun patientEditDemographicsRoute(patientId: String) = "patients/$patientId/editDemographics"
@@ -79,6 +88,9 @@ private fun imagingGalleryRoute(patientId: String) = "patients/$patientId/imagin
 private fun imagingUploadRoute(patientId: String) = "patients/$patientId/imaging/add"
 private fun imagingCompareRoute(patientId: String, imageIdA: String, imageIdB: String) =
     "patients/$patientId/imaging/compare/$imageIdA/$imageIdB"
+private fun patientInvoicesRoute(patientId: String) = "patients/$patientId/invoices"
+private fun patientInvoiceNewRoute(patientId: String) = "patients/$patientId/invoices/new"
+private fun invoiceDetailRoute(invoiceId: String) = "invoices/$invoiceId"
 
 /** Everything reachable once the signed-in user has a resolved clinic role. */
 @Composable
@@ -96,11 +108,13 @@ fun AppNavHost(session: SessionState.Staff, onSignOut: () -> Unit) {
                     onOpenPatients = { navController.navigate(ROUTE_PATIENT_LIST) },
                     onOpenDataRequests = { navController.navigate(ROUTE_DATA_REQUESTS) },
                     onOpenSchedule = { navController.navigate(ROUTE_CALENDAR) },
+                    onOpenBilling = { navController.navigate(ROUTE_BILLING_LIST) },
                 )
                 Role.RECEPTIONIST -> ReceptionistDashboardScreen(
                     onSignOut = onSignOut,
                     onOpenPatients = { navController.navigate(ROUTE_PATIENT_LIST) },
                     onOpenSchedule = { navController.navigate(ROUTE_CALENDAR) },
+                    onOpenBilling = { navController.navigate(ROUTE_BILLING_LIST) },
                 )
                 Role.ASSISTANT -> AssistantDashboardScreen(
                     onSignOut = onSignOut,
@@ -150,6 +164,7 @@ fun AppNavHost(session: SessionState.Staff, onSignOut: () -> Unit) {
                 onOpenChartings = { navController.navigate(chartingListRoute(patientId)) },
                 onOpenTreatmentPlans = { navController.navigate(treatmentPlanListRoute(patientId)) },
                 onOpenImaging = { navController.navigate(imagingGalleryRoute(patientId)) },
+                onOpenInvoices = { navController.navigate(patientInvoicesRoute(patientId)) },
             )
         }
         composable(
@@ -355,6 +370,69 @@ fun AppNavHost(session: SessionState.Staff, onSignOut: () -> Unit) {
                 patientId = backStackEntry.arguments?.getString(ARG_PATIENT_ID).orEmpty(),
                 imageIdA = backStackEntry.arguments?.getString(ARG_IMAGE_ID_A).orEmpty(),
                 imageIdB = backStackEntry.arguments?.getString(ARG_IMAGE_ID_B).orEmpty(),
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(ROUTE_BILLING_LIST) {
+            InvoiceListScreen(
+                clinicId = clinicId,
+                patientId = null,
+                onOpenInvoice = { invoiceId -> navController.navigate(invoiceDetailRoute(invoiceId)) },
+                onNewInvoice = { navController.navigate(ROUTE_BILLING_NEW) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(ROUTE_BILLING_NEW) {
+            InvoiceBuilderScreen(
+                clinicId = clinicId,
+                uid = uid,
+                initialPatientId = null,
+                onSaved = { invoiceId ->
+                    navController.navigate(invoiceDetailRoute(invoiceId)) {
+                        popUpTo(ROUTE_BILLING_LIST)
+                    }
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            ROUTE_PATIENT_INVOICES,
+            arguments = listOf(navArgument(ARG_PATIENT_ID) { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val patientId = backStackEntry.arguments?.getString(ARG_PATIENT_ID).orEmpty()
+            InvoiceListScreen(
+                clinicId = clinicId,
+                patientId = patientId,
+                onOpenInvoice = { invoiceId -> navController.navigate(invoiceDetailRoute(invoiceId)) },
+                onNewInvoice = { navController.navigate(patientInvoiceNewRoute(patientId)) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            ROUTE_PATIENT_INVOICE_NEW,
+            arguments = listOf(navArgument(ARG_PATIENT_ID) { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val patientId = backStackEntry.arguments?.getString(ARG_PATIENT_ID).orEmpty()
+            InvoiceBuilderScreen(
+                clinicId = clinicId,
+                uid = uid,
+                initialPatientId = patientId,
+                onSaved = { invoiceId ->
+                    navController.navigate(invoiceDetailRoute(invoiceId)) {
+                        popUpTo(patientInvoicesRoute(patientId))
+                    }
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            ROUTE_INVOICE_DETAIL,
+            arguments = listOf(navArgument(ARG_INVOICE_ID) { type = NavType.StringType }),
+        ) { backStackEntry ->
+            InvoiceDetailScreen(
+                clinicId = clinicId,
+                invoiceId = backStackEntry.arguments?.getString(ARG_INVOICE_ID).orEmpty(),
+                onVoided = { navController.popBackStack() },
                 onBack = { navController.popBackStack() },
             )
         }
