@@ -59,6 +59,7 @@ fun InvoiceDetailScreen(
     clinicId: String,
     invoiceId: String,
     onVoided: () -> Unit,
+    onFileInsuranceClaim: () -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -155,6 +156,10 @@ fun InvoiceDetailScreen(
 
             OutlinedButton(onClick = { showPaymentDialog = true }, modifier = Modifier.fillMaxWidth()) {
                 Text("Record payment")
+            }
+
+            OutlinedButton(onClick = onFileInsuranceClaim, modifier = Modifier.fillMaxWidth()) {
+                Text("File insurance claim")
             }
 
             OutlinedButton(onClick = { showVoidConfirm = true }, modifier = Modifier.fillMaxWidth()) {

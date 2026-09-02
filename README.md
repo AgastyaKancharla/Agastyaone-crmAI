@@ -233,3 +233,31 @@ Hidden tiles are absent from the grid, not just disabled.
   or card in person.
 - Razorpay payment links (Phase 4b) and insurance/TPA claims (Phase 4c) are explicitly out
   of scope for this phase.
+
+## Phase 4c — Insurance/TPA claim tracking
+
+- **Insurance claims** (`tenants/{clinicId}/insuranceClaims`): owner/dentist and
+  receptionist have full access, same role shape as invoices (a financial/administrative
+  matter, not clinical) - assistant/hygienist and Lab Coordinator get the same clean full
+  exclusion. A claim must reference both a real patient **and** a real invoice in the same
+  tenant (`patientExists()`/`invoiceExists()` in firestore.rules).
+- **`claimAmount` is explicitly framed as "amount claimed from insurance," not the full
+  invoice total** - partial coverage is the norm, so both the claim-creation and
+  claim-detail screens show the patient-owed difference (`invoice.total - claimAmount`)
+  alongside the claimed amount, rather than implying the claim covers everything.
+- **TPA name** is free text with autocomplete suggestions from a short seeded list of
+  common Indian TPAs (`TpaCatalog`) - not a hard enum, since clinics will encounter TPAs
+  not on any seeded list.
+- **Claim documents** (`tenants/{clinicId}/patients/{patientId}/insuranceClaims/{claimId}/...`)
+  mirror the exact Storage rules pattern from signatures (Phase 2a) and imaging
+  (Phase 3b): tenant/role-scoped access via `canAccessInsuranceClaimFiles()`. Unlike
+  imaging's owner-only-delete split, claim files use a single combined read/write rule -
+  owner and receptionist already have identical full CRUD on the claim record itself, so
+  there's no clinical "diagnosis vs. routine tagging" integrity distinction to preserve
+  for the files.
+- Claim documents are routinely scanned PDFs, not just photos, unlike every prior
+  file-upload path in this app - `isReasonablySizedDocument()` accepts `application/pdf`
+  or any `image/*` up to 10MB (vs. `isReasonablySizedImage()`'s 5MB image-only ceiling
+  used elsewhere), and the claim-creation screen's document picker (`ActivityResultContracts.OpenDocument`)
+  accepts either.
+- This closes out **Billing & Financial Management**.

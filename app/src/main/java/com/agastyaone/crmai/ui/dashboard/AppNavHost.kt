@@ -27,6 +27,9 @@ import com.agastyaone.crmai.ui.billing.InvoiceListScreen
 import com.agastyaone.crmai.ui.imaging.ImageComparisonScreen
 import com.agastyaone.crmai.ui.imaging.ImageGalleryScreen
 import com.agastyaone.crmai.ui.imaging.ImageUploadScreen
+import com.agastyaone.crmai.ui.insurance.InsuranceClaimBuilderScreen
+import com.agastyaone.crmai.ui.insurance.InsuranceClaimDetailScreen
+import com.agastyaone.crmai.ui.insurance.InsuranceClaimsListScreen
 import com.agastyaone.crmai.ui.patients.DataRequestsScreen
 import com.agastyaone.crmai.ui.patients.IntakeFlowScreen
 import com.agastyaone.crmai.ui.patients.PatientClinicalEditScreen
@@ -73,6 +76,10 @@ private const val ROUTE_PATIENT_INVOICES = "patients/{$ARG_PATIENT_ID}/invoices"
 private const val ROUTE_PATIENT_INVOICE_NEW = "patients/{$ARG_PATIENT_ID}/invoices/new"
 private const val ARG_INVOICE_ID = "invoiceId"
 private const val ROUTE_INVOICE_DETAIL = "invoices/{$ARG_INVOICE_ID}"
+private const val ROUTE_INSURANCE_CLAIMS_LIST = "insuranceClaims"
+private const val ROUTE_INVOICE_CLAIM_NEW = "invoices/{$ARG_INVOICE_ID}/insuranceClaims/new"
+private const val ARG_CLAIM_ID = "claimId"
+private const val ROUTE_CLAIM_DETAIL = "insuranceClaims/{$ARG_CLAIM_ID}"
 
 private fun patientDetailRoute(patientId: String) = "patients/$patientId"
 private fun patientEditDemographicsRoute(patientId: String) = "patients/$patientId/editDemographics"
@@ -91,6 +98,8 @@ private fun imagingCompareRoute(patientId: String, imageIdA: String, imageIdB: S
 private fun patientInvoicesRoute(patientId: String) = "patients/$patientId/invoices"
 private fun patientInvoiceNewRoute(patientId: String) = "patients/$patientId/invoices/new"
 private fun invoiceDetailRoute(invoiceId: String) = "invoices/$invoiceId"
+private fun invoiceClaimNewRoute(invoiceId: String) = "invoices/$invoiceId/insuranceClaims/new"
+private fun claimDetailRoute(claimId: String) = "insuranceClaims/$claimId"
 
 /** Everything reachable once the signed-in user has a resolved clinic role. */
 @Composable
@@ -109,12 +118,14 @@ fun AppNavHost(session: SessionState.Staff, onSignOut: () -> Unit) {
                     onOpenDataRequests = { navController.navigate(ROUTE_DATA_REQUESTS) },
                     onOpenSchedule = { navController.navigate(ROUTE_CALENDAR) },
                     onOpenBilling = { navController.navigate(ROUTE_BILLING_LIST) },
+                    onOpenInsuranceClaims = { navController.navigate(ROUTE_INSURANCE_CLAIMS_LIST) },
                 )
                 Role.RECEPTIONIST -> ReceptionistDashboardScreen(
                     onSignOut = onSignOut,
                     onOpenPatients = { navController.navigate(ROUTE_PATIENT_LIST) },
                     onOpenSchedule = { navController.navigate(ROUTE_CALENDAR) },
                     onOpenBilling = { navController.navigate(ROUTE_BILLING_LIST) },
+                    onOpenInsuranceClaims = { navController.navigate(ROUTE_INSURANCE_CLAIMS_LIST) },
                 )
                 Role.ASSISTANT -> AssistantDashboardScreen(
                     onSignOut = onSignOut,
@@ -429,10 +440,51 @@ fun AppNavHost(session: SessionState.Staff, onSignOut: () -> Unit) {
             ROUTE_INVOICE_DETAIL,
             arguments = listOf(navArgument(ARG_INVOICE_ID) { type = NavType.StringType }),
         ) { backStackEntry ->
+            val invoiceId = backStackEntry.arguments?.getString(ARG_INVOICE_ID).orEmpty()
             InvoiceDetailScreen(
                 clinicId = clinicId,
-                invoiceId = backStackEntry.arguments?.getString(ARG_INVOICE_ID).orEmpty(),
+                invoiceId = invoiceId,
                 onVoided = { navController.popBackStack() },
+                onFileInsuranceClaim = { navController.navigate(invoiceClaimNewRoute(invoiceId)) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(ROUTE_INSURANCE_CLAIMS_LIST) {
+            InsuranceClaimsListScreen(
+                clinicId = clinicId,
+                onOpenClaim = { claimId -> navController.navigate(claimDetailRoute(claimId)) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            ROUTE_INVOICE_CLAIM_NEW,
+            arguments = listOf(navArgument(ARG_INVOICE_ID) { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val invoiceId = backStackEntry.arguments?.getString(ARG_INVOICE_ID).orEmpty()
+            InsuranceClaimBuilderScreen(
+                clinicId = clinicId,
+                uid = uid,
+                invoiceId = invoiceId,
+                onSaved = { claimId ->
+                    // Pop back to the invoice this claim was filed from, not the builder
+                    // form - same "don't leave the submitted form on the back stack"
+                    // reasoning as the invoice/patient flows above, but here the correct
+                    // target is always this exact invoice regardless of whether it was
+                    // opened from the clinic-wide or per-patient invoice list.
+                    navController.navigate(claimDetailRoute(claimId)) {
+                        popUpTo(invoiceDetailRoute(invoiceId))
+                    }
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            ROUTE_CLAIM_DETAIL,
+            arguments = listOf(navArgument(ARG_CLAIM_ID) { type = NavType.StringType }),
+        ) { backStackEntry ->
+            InsuranceClaimDetailScreen(
+                clinicId = clinicId,
+                claimId = backStackEntry.arguments?.getString(ARG_CLAIM_ID).orEmpty(),
                 onBack = { navController.popBackStack() },
             )
         }

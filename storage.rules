@@ -43,6 +43,16 @@ service firebase.storage {
         request.resource.contentType.matches('image/.*');
     }
 
+    // Phase 4c - insurance claim documents (claim forms, etc.) are routinely scanned
+    // PDFs, not just photos, unlike every prior file-upload path in this app - hence
+    // a separate check rather than reusing isReasonablySizedImage(), with a larger
+    // size ceiling for multi-page scanned forms.
+    function isReasonablySizedDocument() {
+      return request.resource.size < 10 * 1024 * 1024 &&
+        (request.resource.contentType.matches('image/.*') ||
+          request.resource.contentType == 'application/pdf');
+    }
+
     match /tenants/{clinicId}/patients/{patientId}/signatures/{fileName} {
       allow read: if canReadPatientFiles(clinicId);
       allow write: if canWritePatientFiles(clinicId) && isReasonablySizedImage();
@@ -66,6 +76,20 @@ service firebase.storage {
       allow create: if canWriteImaging(clinicId) && isReasonablySizedImage();
       allow update: if canWriteImaging(clinicId) && isReasonablySizedImage();
       allow delete: if isOwnerOfTenant(clinicId);
+    }
+
+    // Phase 4c - insurance/TPA claim documents. Same access shape as the Firestore
+    // insuranceClaims rules: owner/receptionist read and write, assistant/labCoordinator
+    // no access at all - a financial/administrative matter, not clinical, so unlike
+    // imaging above there's no owner-only-delete split; either role can already
+    // delete/edit the claim record itself, so the same holds for its files.
+    function canAccessInsuranceClaimFiles(clinicId) {
+      return isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId);
+    }
+
+    match /tenants/{clinicId}/patients/{patientId}/insuranceClaims/{claimId}/{fileName} {
+      allow read: if canAccessInsuranceClaimFiles(clinicId);
+      allow write: if canAccessInsuranceClaimFiles(clinicId) && isReasonablySizedDocument();
     }
 
     match /{allPaths=**} {

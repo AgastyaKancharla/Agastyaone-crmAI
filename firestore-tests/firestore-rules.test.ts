@@ -242,6 +242,30 @@ async function seedFixtures(): Promise<void> {
       razorpayStatus: null,
       treatmentPlanId: null,
     });
+    await setDoc(doc(db, "tenants/A/insuranceClaims/claimA1"), {
+      patientId: "patientA1",
+      invoiceId: "invoiceA1",
+      tpaName: "Medi Assist",
+      claimAmount: 1000,
+      status: "submitted",
+      documentUrls: ["https://example.com/claimA1-form.pdf"],
+      submittedAt: "2026-02-06T00:00:00Z",
+      submittedByUid: "receptionistA",
+      resolvedAt: null,
+      resolutionNotes: null,
+    });
+    await setDoc(doc(db, "tenants/B/insuranceClaims/claimB1"), {
+      patientId: "patientB1",
+      invoiceId: "invoiceB1",
+      tpaName: "Star Health",
+      claimAmount: 500,
+      status: "submitted",
+      documentUrls: [],
+      submittedAt: "2026-02-06T00:00:00Z",
+      submittedByUid: "ownerB",
+      resolvedAt: null,
+      resolutionNotes: null,
+    });
     await setDoc(doc(db, "platformAdmins/adminX"), {
       name: "Admin X",
       email: "adminx@agastyaone.com",
@@ -968,6 +992,102 @@ describe("invoices - GST billing", () => {
 
     await assertFails(
       setDoc(doc(db, "tenants/A/invoices/invoiceGhost"), invoicePayload({ patientId: "noSuchPatient" }))
+    );
+  });
+});
+
+describe("insuranceClaims - TPA claim tracking", () => {
+  function claimPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      patientId: "patientA1",
+      invoiceId: "invoiceA1",
+      tpaName: "Paramount Health Services",
+      claimAmount: 800,
+      status: "submitted",
+      documentUrls: [],
+      submittedAt: "2026-02-07T00:00:00Z",
+      submittedByUid: "receptionistA",
+      resolvedAt: null,
+      resolutionNotes: null,
+      ...overrides,
+    };
+  }
+
+  it("lets the owner and the receptionist create, read, and update a claim", async () => {
+    await seedFixtures();
+    const ownerDb = ownerAContext().firestore();
+    const receptionistDb = receptionistAContext().firestore();
+
+    await assertSucceeds(
+      setDoc(doc(receptionistDb, "tenants/A/insuranceClaims/claimA2"), claimPayload())
+    );
+    await assertSucceeds(getDoc(doc(ownerDb, "tenants/A/insuranceClaims/claimA1")));
+    await assertSucceeds(
+      updateDoc(doc(receptionistDb, "tenants/A/insuranceClaims/claimA1"), { status: "underReview" })
+    );
+    await assertSucceeds(
+      updateDoc(doc(ownerDb, "tenants/A/insuranceClaims/claimA1"), {
+        status: "approved",
+        resolvedAt: "2026-02-10T00:00:00Z",
+        resolutionNotes: "Approved in full",
+      })
+    );
+  });
+
+  it("lets the owner and the receptionist delete a claim", async () => {
+    await seedFixtures();
+    const ownerDb = ownerAContext().firestore();
+    const receptionistDb = receptionistAContext().firestore();
+
+    await assertSucceeds(
+      setDoc(doc(receptionistDb, "tenants/A/insuranceClaims/claimToDelete"), claimPayload())
+    );
+    await assertSucceeds(deleteDoc(doc(ownerDb, "tenants/A/insuranceClaims/claimToDelete")));
+  });
+
+  it("CORE: rejects the assistant's read AND write of insurance claims outright", async () => {
+    await seedFixtures();
+    const db = assistantAContext().firestore();
+
+    await assertFails(getDoc(doc(db, "tenants/A/insuranceClaims/claimA1")));
+    await assertFails(updateDoc(doc(db, "tenants/A/insuranceClaims/claimA1"), { status: "approved" }));
+    await assertFails(setDoc(doc(db, "tenants/A/insuranceClaims/claimGhost"), claimPayload()));
+    await assertFails(deleteDoc(doc(db, "tenants/A/insuranceClaims/claimA1")));
+  });
+
+  it("CORE: rejects the Lab Coordinator's read AND write of insurance claims outright", async () => {
+    await seedFixtures();
+    const db = labCoordinatorAContext().firestore();
+
+    await assertFails(getDoc(doc(db, "tenants/A/insuranceClaims/claimA1")));
+    await assertFails(updateDoc(doc(db, "tenants/A/insuranceClaims/claimA1"), { status: "approved" }));
+    await assertFails(setDoc(doc(db, "tenants/A/insuranceClaims/claimGhost"), claimPayload()));
+  });
+
+  it("CORE: denies clinic A staff any read or write of clinic B's insurance claims", async () => {
+    await seedFixtures();
+    const db = ownerAContext().firestore();
+
+    await assertFails(getDoc(doc(db, "tenants/B/insuranceClaims/claimB1")));
+    await assertFails(updateDoc(doc(db, "tenants/B/insuranceClaims/claimB1"), { status: "approved" }));
+    await assertFails(deleteDoc(doc(db, "tenants/B/insuranceClaims/claimB1")));
+  });
+
+  it("rejects a claim that references a patientId not in this tenant", async () => {
+    await seedFixtures();
+    const db = ownerAContext().firestore();
+
+    await assertFails(
+      setDoc(doc(db, "tenants/A/insuranceClaims/claimGhost"), claimPayload({ patientId: "noSuchPatient" }))
+    );
+  });
+
+  it("rejects a claim that references an invoiceId not in this tenant", async () => {
+    await seedFixtures();
+    const db = ownerAContext().firestore();
+
+    await assertFails(
+      setDoc(doc(db, "tenants/A/insuranceClaims/claimGhost"), claimPayload({ invoiceId: "noSuchInvoice" }))
     );
   });
 });

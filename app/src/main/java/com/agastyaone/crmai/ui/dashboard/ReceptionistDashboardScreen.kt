@@ -8,6 +8,7 @@ fun ReceptionistDashboardScreen(
     onOpenPatients: () -> Unit,
     onOpenSchedule: () -> Unit,
     onOpenBilling: () -> Unit,
+    onOpenInsuranceClaims: () -> Unit,
 ) {
     DashboardScaffold(
         title = "Clinic dashboard",
@@ -16,6 +17,7 @@ fun ReceptionistDashboardScreen(
             DashboardTile("Schedule", onClick = onOpenSchedule),
             DashboardTile("Patients", onClick = onOpenPatients),
             DashboardTile("Billing", onClick = onOpenBilling),
+            DashboardTile("Insurance Claims", onClick = onOpenInsuranceClaims),
         ),
         onSignOut = onSignOut,
     )
