@@ -1,6 +1,7 @@
 package com.agastyaone.crmai.core
 
 import com.agastyaone.crmai.data.auth.AuthRepository
+import com.agastyaone.crmai.data.billing.InvoiceRepository
 import com.agastyaone.crmai.data.charting.ChartingRepository
 import com.agastyaone.crmai.data.charting.TreatmentPlanRepository
 import com.agastyaone.crmai.data.functions.CloudFunctionsRepository
@@ -21,6 +22,7 @@ object ServiceLocator {
     val cloudFunctionsRepository: CloudFunctionsRepository by lazy { CloudFunctionsRepository() }
     val imageUploader: ImageUploader by lazy { ImageUploader() }
     val imagingRepository: ImagingRepository by lazy { ImagingRepository() }
+    val invoiceRepository: InvoiceRepository by lazy { InvoiceRepository() }
     val patientRepository: PatientRepository by lazy { PatientRepository() }
     val scheduleRepository: ScheduleRepository by lazy { ScheduleRepository() }
     val signatureUploader: SignatureUploader by lazy { SignatureUploader() }

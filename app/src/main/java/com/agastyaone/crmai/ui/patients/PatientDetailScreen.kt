@@ -49,6 +49,7 @@ fun PatientDetailScreen(
     onOpenChartings: () -> Unit,
     onOpenTreatmentPlans: () -> Unit,
     onOpenImaging: () -> Unit,
+    onOpenInvoices: () -> Unit,
 ) {
     val repository = ServiceLocator.patientRepository
     val patient by repository.observePatient(clinicId, patientId).collectAsState(initial = null)
@@ -157,6 +158,18 @@ fun PatientDetailScreen(
                     // imaging at all, so the button stays hidden for them.
                     OutlinedButton(onClick = onOpenImaging, modifier = Modifier.fillMaxWidth()) {
                         Text("X-rays & imaging")
+                    }
+                }
+
+                // Phase 4a - GST invoicing. Owner/receptionist only, a clean full
+                // exclusion for Assistant and Lab Coordinator - unlike the clinical
+                // buttons above, there's no assistant carve-out here at all, matching
+                // firestore.rules' invoices match block.
+                if (role == Role.OWNER || role == Role.RECEPTIONIST) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    SectionHeader("Billing")
+                    OutlinedButton(onClick = onOpenInvoices, modifier = Modifier.fillMaxWidth()) {
+                        Text("Invoices")
                     }
                 }
             }

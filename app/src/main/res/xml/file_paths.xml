@@ -4,4 +4,7 @@
          upload, per ImageCaptureUtils. Cache, not files/, since it's a throwaway
          staging copy, not something the app needs to keep around. -->
     <cache-path name="imaging_captures" path="imaging/" />
+    <!-- Phase 4a - generated invoice PDFs, staged here before being handed to the
+         Android share sheet via a FileProvider Uri. -->
+    <cache-path name="invoice_pdfs" path="invoices/" />
 </paths>
