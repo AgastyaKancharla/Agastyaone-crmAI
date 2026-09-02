@@ -80,6 +80,14 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/tenants/$(clinicId)/patients/$(patientId));
     }
 
+    // An appointment's end must be after its start, on every write - not just create,
+    // since a reschedule (update) can just as easily submit a reversed pair. Compared
+    // directly (not type-checked as `timestamp`) since the two sides just need to be
+    // ordered consistently, whatever comparable type the client sends them as.
+    function validAppointmentTimes() {
+      return request.resource.data.endTime > request.resource.data.startTime;
+    }
+
     // Only a platform admin may read/write their own admin doc. This collection is
     // intentionally separate from the clinic signup/invite flow - nothing here ever
     // grants platformAdmin; only the onPlatformAdminWrite Cloud Function's trigger
@@ -168,10 +176,12 @@ service cloud.firestore {
           isAssistantOfTenant(clinicId);
 
         allow create: if (isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId)) &&
-          patientExists(clinicId, request.resource.data.patientId);
+          patientExists(clinicId, request.resource.data.patientId) &&
+          validAppointmentTimes();
 
         allow update: if (isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId)) &&
-          patientExists(clinicId, request.resource.data.patientId);
+          patientExists(clinicId, request.resource.data.patientId) &&
+          validAppointmentTimes();
 
         allow delete: if isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId);
       }

@@ -161,8 +161,18 @@ private fun DayTimeline(
     onOpenAppointment: (String) -> Unit,
     onLongPressAppointment: (Appointment) -> Unit,
 ) {
+    // Appointments can exist outside the usual 8-19 window (a walk-in booked early or
+    // late) - the timeline always extends to cover every appointment on the day, so
+    // nothing booked ends up invisible here even though it's counted in the week view.
+    val displayHours = remember(appointments) {
+        val appointmentHours = appointments.mapNotNull { it.startTime?.toLocalDateTime()?.hour }
+        val minHour = minOf(TIMELINE_HOURS.first, appointmentHours.minOrNull() ?: TIMELINE_HOURS.first)
+        val maxHour = maxOf(TIMELINE_HOURS.last, appointmentHours.maxOrNull() ?: TIMELINE_HOURS.last)
+        (minHour..maxHour).toList()
+    }
+
     LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        items(TIMELINE_HOURS.toList()) { hour ->
+        items(displayHours) { hour ->
             val hourAppointments = appointments.filter { it.startTime?.toLocalDateTime()?.hour == hour }
             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                 Text(
@@ -180,7 +190,11 @@ private fun DayTimeline(
                                     .fillMaxWidth()
                                     .combinedClickable(
                                         onClick = { onOpenAppointment(appointment.id) },
-                                        onLongClick = { if (canEdit) onLongPressAppointment(appointment) },
+                                        onLongClick = {
+                                            if (canEdit && !isTerminalStatus(appointment.status)) {
+                                                onLongPressAppointment(appointment)
+                                            }
+                                        },
                                     ),
                                 colors = androidx.compose.material3.CardDefaults.cardColors(
                                     containerColor = colorForStatus(appointment.status),

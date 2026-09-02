@@ -487,6 +487,33 @@ describe("scheduling - appointments", () => {
     );
   });
 
+  it("rejects an appointment create or reschedule where endTime is not after startTime", async () => {
+    await seedFixtures();
+    const db = receptionistAContext().firestore();
+
+    await assertFails(
+      setDoc(doc(db, "tenants/A/appointments/appointmentBackwards"), {
+        patientId: "patientA1",
+        patientName: "Alice Apple",
+        dentistUid: "ownerA",
+        startTime: "2026-02-02T09:30:00Z",
+        endTime: "2026-02-02T09:00:00Z",
+        status: "scheduled",
+        source: "walkIn",
+        notes: "",
+        createdByUid: "receptionistA",
+        createdAt: "2026-01-16T00:00:00Z",
+        cancelledReason: null,
+      })
+    );
+    await assertFails(
+      updateDoc(doc(db, "tenants/A/appointments/appointmentA1"), {
+        startTime: "2026-02-01T09:30:00Z",
+        endTime: "2026-02-01T09:00:00Z",
+      })
+    );
+  });
+
   it("rejects an appointment or waitlist write that references a patientId not in this tenant", async () => {
     await seedFixtures();
     const db = receptionistAContext().firestore();

@@ -39,6 +39,7 @@ private const val ROUTE_PATIENT_INTAKE = "patients/{$ARG_PATIENT_ID}/intake"
 private const val ROUTE_DATA_REQUESTS = "dataRequests"
 private const val ROUTE_CALENDAR = "calendar"
 private const val ROUTE_WALK_IN = "calendar/walkIn"
+private const val ROUTE_WALK_IN_PATIENT_ADD = "calendar/walkIn/add"
 private const val ROUTE_WAITLIST = "calendar/waitlist"
 private const val ARG_APPOINTMENT_ID = "appointmentId"
 private const val ROUTE_APPOINTMENT_DETAIL = "calendar/appointments/{$ARG_APPOINTMENT_ID}"
@@ -173,11 +174,23 @@ fun AppNavHost(session: SessionState.Staff, onSignOut: () -> Unit) {
             WalkInScreen(
                 clinicId = clinicId,
                 uid = uid,
-                // The patient-creation screen returns to the patient's own detail page,
-                // not back into this in-progress walk-in form - the receptionist re-opens
-                // the FAB from the calendar to finish booking once the patient exists.
-                onGoToPatientCreation = { navController.navigate(ROUTE_PATIENT_ADD) },
+                onGoToPatientCreation = { navController.navigate(ROUTE_WALK_IN_PATIENT_ADD) },
                 onBooked = { navController.popBackStack() },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(ROUTE_WALK_IN_PATIENT_ADD) {
+            // A walk-in-specific copy of the add-patient route: ROUTE_PATIENT_LIST isn't
+            // on this branch's back stack (Dashboard -> Calendar -> WalkIn -> here), so the
+            // shared route's popUpTo(ROUTE_PATIENT_LIST) can't reach it and would leave the
+            // submitted form sitting behind the new patient's detail page. Popping straight
+            // back to the calendar instead avoids that stale-form/duplicate-creation trap -
+            // the receptionist re-opens the FAB to finish booking now that the patient exists.
+            PatientFormScreen(
+                clinicId = clinicId,
+                uid = uid,
+                existingPatient = null,
+                onSaved = { navController.popBackStack(ROUTE_CALENDAR, inclusive = false) },
                 onBack = { navController.popBackStack() },
             )
         }

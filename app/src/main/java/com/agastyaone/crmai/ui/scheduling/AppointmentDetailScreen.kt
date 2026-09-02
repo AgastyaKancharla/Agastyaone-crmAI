@@ -93,7 +93,7 @@ fun AppointmentDetailScreen(
         val patient by patientRepository.observePatient(clinicId, current.patientId).collectAsState(initial = null)
         val currentStatus = AppointmentStatus.fromId(current.status)
         val nextStatus = FORWARD_PIPELINE.getOrNull(FORWARD_PIPELINE.indexOf(currentStatus) + 1)
-        val isTerminal = currentStatus == AppointmentStatus.CANCELLED || currentStatus == AppointmentStatus.NO_SHOW
+        val isTerminal = isTerminalStatus(current.status)
 
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),

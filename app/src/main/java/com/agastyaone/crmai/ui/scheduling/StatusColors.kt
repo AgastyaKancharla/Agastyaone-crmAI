@@ -21,3 +21,13 @@ fun labelForStatus(status: String): String = when (AppointmentStatus.fromId(stat
     AppointmentStatus.CANCELLED -> "Cancelled"
     AppointmentStatus.NO_SHOW -> "No-show"
 }
+
+/**
+ * An appointment that's done, one way or another, is done: completed visits are just as
+ * terminal as cancelled/no-show ones, so nothing here (calendar long-press, detail-screen
+ * edit controls) should offer to edit, reschedule, or re-cancel any of the three.
+ */
+fun isTerminalStatus(status: String): Boolean = when (AppointmentStatus.fromId(status)) {
+    AppointmentStatus.COMPLETED, AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW -> true
+    AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED, AppointmentStatus.CHECKED_IN -> false
+}
