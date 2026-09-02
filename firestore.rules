@@ -244,6 +244,26 @@ service cloud.firestore {
 
         allow delete: if isOwnerOfTenant(clinicId);
       }
+
+      // Phase 3b - X-ray/imaging metadata. Same real-world split as Phase 3a's
+      // periodontal readings: capturing an image is routinely an assistant/hygienist's
+      // job, so they get create/read/update (tagging: tooth number, type, notes) same
+      // as the owner/dentist - but deleting a clinical record is owner-only, both for
+      // record-integrity reasons and because an accidental/malicious deletion of
+      // patient imaging is a bigger risk than a tagging mistake. Receptionist and Lab
+      // Coordinator get no access at all, same total exclusion as the rest of the
+      // clinical module.
+      match /imaging/{imageId} {
+        allow read: if isOwnerOfTenant(clinicId) || isAssistantOfTenant(clinicId);
+
+        allow create: if (isOwnerOfTenant(clinicId) || isAssistantOfTenant(clinicId)) &&
+          patientExists(clinicId, request.resource.data.patientId);
+
+        allow update: if (isOwnerOfTenant(clinicId) || isAssistantOfTenant(clinicId)) &&
+          patientExists(clinicId, request.resource.data.patientId);
+
+        allow delete: if isOwnerOfTenant(clinicId);
+      }
     }
 
     match /{document=**} {

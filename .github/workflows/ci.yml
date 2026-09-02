@@ -59,13 +59,13 @@ jobs:
         run: npm run lint
 
   rules-test:
-    name: Firestore rules tests
+    name: Firestore + Storage rules tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up JDK 21
-        # The Firestore emulator runs on the JVM, and current firebase-tools
+        # The Firestore/Storage emulators run on the JVM, and current firebase-tools
         # requires Java 21+ to run at all (older JDKs fail outright).
         uses: actions/setup-java@v4
         with:
@@ -83,11 +83,12 @@ jobs:
         working-directory: firestore-tests
         run: npm ci
 
-      - name: Run rules tests against the Firestore emulator
+      - name: Run rules tests against the Firestore and Storage emulators
         # No live Firebase project needed - "demo-*" project IDs are handled
-        # entirely by the emulator.
+        # entirely by the emulators. Phase 3b adds storage-rules.test.ts, the
+        # first suite that needs the Storage emulator alongside Firestore's.
         run: |
           npx --yes firebase-tools@latest emulators:exec \
             --project demo-agastyaone-rules-test \
-            --only firestore \
+            --only firestore,storage \
             "npm --prefix firestore-tests run test"

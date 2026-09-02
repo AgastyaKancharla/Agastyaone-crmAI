@@ -48,6 +48,26 @@ service firebase.storage {
       allow write: if canWritePatientFiles(clinicId) && isReasonablySizedImage();
     }
 
+    // Phase 3b - X-ray/imaging files. Mirrors the imaging/{imageId} Firestore rules:
+    // owner/assistant can upload and view (Receptionist excluded here, unlike the
+    // signatures path above, since imaging is clinical-only); deleting the actual
+    // file is owner-only, same reasoning as the Firestore delete restriction - so it's
+    // deliberately not folded into a single "write" rule the way signatures is.
+    function canReadImaging(clinicId) {
+      return isOwnerOfTenant(clinicId) || isAssistantOfTenant(clinicId);
+    }
+
+    function canWriteImaging(clinicId) {
+      return isOwnerOfTenant(clinicId) || isAssistantOfTenant(clinicId);
+    }
+
+    match /tenants/{clinicId}/patients/{patientId}/imaging/{fileName} {
+      allow read: if canReadImaging(clinicId);
+      allow create: if canWriteImaging(clinicId) && isReasonablySizedImage();
+      allow update: if canWriteImaging(clinicId) && isReasonablySizedImage();
+      allow delete: if isOwnerOfTenant(clinicId);
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
