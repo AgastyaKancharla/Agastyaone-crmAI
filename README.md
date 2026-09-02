@@ -233,3 +233,71 @@ Hidden tiles are absent from the grid, not just disabled.
   or card in person.
 - Razorpay payment links (Phase 4b) and insurance/TPA claims (Phase 4c) are explicitly out
   of scope for this phase.
+
+## Phase 4b — Razorpay payment links & webhook
+
+This phase handles real money and a real external API. **Use Razorpay TEST MODE keys
+only** until you've genuinely verified everything below - never live keys as part of
+"just getting it working."
+
+- **Where the secrets live**: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and
+  `RAZORPAY_WEBHOOK_SECRET` are declared with `defineSecret()` in
+  `functions/src/razorpaySecrets.ts` - names only, never values. The actual values live
+  in Google Secret Manager, set per-deployment with:
+  ```
+  firebase functions:secrets:set RAZORPAY_KEY_ID
+  firebase functions:secrets:set RAZORPAY_KEY_SECRET
+  firebase functions:secrets:set RAZORPAY_WEBHOOK_SECRET
+  ```
+  (each prompts for the value interactively - paste your Razorpay **test-mode** key ID,
+  key secret, and the webhook secret you set when creating the webhook in the Razorpay
+  dashboard). These three commands are things only you can run against your own Firebase
+  project; this repo never contains real key material anywhere, committed or otherwise.
+- **Local/emulator testing** uses a git-ignored `functions/.secret.local` file instead
+  (see `.gitignore`) with obviously-fake placeholder values - never real keys, and this
+  file is never committed. The CI job and this repo's own test suite use their own
+  placeholder secret, not Secret Manager, so no real Razorpay account is needed to get
+  CI green.
+- **Webhook signature verification is the *only* protection on `razorpayWebhook`.**
+  It's a server-to-server call from Razorpay using the Admin SDK, which bypasses
+  firestore.rules entirely (rules only ever govern client access) - so
+  `verifyRazorpaySignature()` (HMAC-SHA256 over the raw request bytes, constant-time
+  compared via `timingSafeEqual`) runs before anything else, on every request, with no
+  Firestore read or write above that check.
+- **Amount verification**: the webhook never trusts "Razorpay says this link was paid"
+  by itself - it re-reads the invoice's actual amount due at the moment the webhook
+  arrives and compares it to the paid amount in the payload. A mismatch (over/under
+  what's owed) is flagged (an audit log entry) and never applied.
+- **Idempotency**: Razorpay retries webhook delivery on any non-2xx response or timeout,
+  so the same "paid" event can arrive more than once. The invoice stores the Razorpay
+  payment ID that last updated it (`razorpayPaymentId`); a repeat delivery with the same
+  ID is a no-op, not a double-applied payment.
+- **`createPaymentLink`** (callable) only ever reads `clinicId` from the caller's own
+  Firebase Auth custom claim - never a client-supplied argument - so it structurally
+  cannot be pointed at another clinic's invoice, and is restricted to Owner/Receptionist
+  (a clean exclusion for Assistant/Lab Coordinator, matching the rest of billing).
+- **Android**: "Generate payment link" on the invoice detail screen (Owner/Receptionist
+  only) calls `createPaymentLink` and shares the resulting URL through the standard
+  Android share sheet - same pattern as the Phase 4a PDF share, still not the automated
+  WhatsApp Cloud API integration (a later phase). `razorpayStatus` is shown alongside
+  `paymentStatus` so staff can see at a glance whether a sent link was actually paid.
+- **Testing**: `functions-tests/` (a separate package from `firestore-tests/`) covers the
+  Cloud Function logic directly - valid-signature-and-matching-amount marks an invoice
+  paid, invalid/missing signature is rejected and updates nothing, a mismatched amount is
+  flagged not applied, the same valid event delivered twice doesn't double-apply, and
+  `createPaymentLink`'s role/tenant authorization (receptionist succeeds for their own
+  clinic, assistant and cross-tenant attempts are rejected) - all run against the real
+  local Firestore emulator, never mocked. These tests import the Cloud Functions' handler
+  logic directly rather than going through the Functions/Auth emulators' HTTP layer
+  (see the doc comments on `createPaymentLinkHandler`/`handleRazorpayWebhookEvent`), so
+  only the Firestore emulator is needed - the one genuine Razorpay network call
+  (`createRazorpayPaymentLink`) is exercised with a stubbed response in tests, never a
+  real API call.
+- **What this sandbox could not verify**: an actual deployment to a live Firebase
+  project and a genuine end-to-end Razorpay test-mode payment are outside what this
+  development environment can do (no live deploy credentials, no path to Razorpay's real
+  API). The Cloud Function logic is fully built and tested as described above; deploying
+  with your own test-mode secrets and completing one real test payment to confirm the
+  webhook actually flips an invoice to paid is the next step, the same division of labor
+  as this project's Android on-device testing.
+- Insurance/TPA claims tracking (Phase 4c) is explicitly out of scope for this phase.

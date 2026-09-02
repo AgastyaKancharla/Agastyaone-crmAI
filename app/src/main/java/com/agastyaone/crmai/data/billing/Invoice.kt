@@ -71,6 +71,8 @@ data class Invoice(
     val amountPaid: Double = 0.0,
     val razorpayPaymentLinkId: String? = null,
     val razorpayStatus: String? = null,
+    /** Phase 4b - set by the razorpayWebhook Cloud Function once payment is confirmed; used there for idempotency. */
+    val razorpayPaymentId: String? = null,
     val treatmentPlanId: String? = null,
 ) {
     val parsedLineItems: List<InvoiceLineItem>

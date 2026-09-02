@@ -5,7 +5,10 @@ export type AuditActionType =
   | "clinic_created"
   | "staff_invite_sent"
   | "staff_invite_accepted"
-  | "role_change";
+  | "role_change"
+  | "payment_link_created"
+  | "payment_received"
+  | "payment_amount_mismatch";
 
 export interface WriteAuditLogParams {
   clinicId: string;
