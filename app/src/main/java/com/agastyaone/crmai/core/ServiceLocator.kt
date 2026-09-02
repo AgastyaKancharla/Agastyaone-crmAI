@@ -3,6 +3,7 @@ package com.agastyaone.crmai.core
 import com.agastyaone.crmai.data.auth.AuthRepository
 import com.agastyaone.crmai.data.functions.CloudFunctionsRepository
 import com.agastyaone.crmai.data.patients.PatientRepository
+import com.agastyaone.crmai.data.scheduling.ScheduleRepository
 import com.agastyaone.crmai.data.storage.SignatureUploader
 
 /**
@@ -13,5 +14,6 @@ object ServiceLocator {
     val authRepository: AuthRepository by lazy { AuthRepository() }
     val cloudFunctionsRepository: CloudFunctionsRepository by lazy { CloudFunctionsRepository() }
     val patientRepository: PatientRepository by lazy { PatientRepository() }
+    val scheduleRepository: ScheduleRepository by lazy { ScheduleRepository() }
     val signatureUploader: SignatureUploader by lazy { SignatureUploader() }
 }
