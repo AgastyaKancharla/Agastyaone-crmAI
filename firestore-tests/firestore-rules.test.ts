@@ -129,6 +129,56 @@ async function seedFixtures(): Promise<void> {
       createdAt: "2026-01-15T00:00:00Z",
       cancelledReason: null,
     });
+    await setDoc(doc(db, "tenants/A/chartings/chartingA1"), {
+      patientId: "patientA1",
+      visitDate: "2026-02-01T00:00:00Z",
+      dentistUid: "ownerA",
+      dentitionType: "adult",
+      toothConditions: {
+        "11": { surfaces: { occlusal: "caries" }, notes: "" },
+      },
+      periodontalChart: {
+        "11": {
+          pocketDepths: [2, 2, 3, 2, 2, 3],
+          bleeding: [false, false, false, false, false, false],
+          mobilityGrade: 0,
+        },
+      },
+      lastEditedByUid: "ownerA",
+      lastEditedAt: "2026-02-01T00:00:00Z",
+    });
+    await setDoc(doc(db, "tenants/A/treatmentPlans/planA1"), {
+      patientId: "patientA1",
+      createdByUid: "ownerA",
+      createdAt: "2026-02-01T00:00:00Z",
+      status: "draft",
+      lineItems: [
+        { procedureCode: "SCALING", procedureName: "Scaling & Polishing", toothNumber: null, estimatedCost: 1500, status: "pending" },
+      ],
+      totalEstimate: 1500,
+      patientApprovalSignatureUrl: null,
+      patientApprovedAt: null,
+    });
+    await setDoc(doc(db, "tenants/B/chartings/chartingB1"), {
+      patientId: "patientB1",
+      visitDate: "2026-02-01T00:00:00Z",
+      dentistUid: "ownerB",
+      dentitionType: "adult",
+      toothConditions: {},
+      periodontalChart: {},
+      lastEditedByUid: "ownerB",
+      lastEditedAt: "2026-02-01T00:00:00Z",
+    });
+    await setDoc(doc(db, "tenants/B/treatmentPlans/planB1"), {
+      patientId: "patientB1",
+      createdByUid: "ownerB",
+      createdAt: "2026-02-01T00:00:00Z",
+      status: "draft",
+      lineItems: [],
+      totalEstimate: 0,
+      patientApprovalSignatureUrl: null,
+      patientApprovedAt: null,
+    });
     await setDoc(doc(db, "platformAdmins/adminX"), {
       name: "Admin X",
       email: "adminx@agastyaone.com",
@@ -544,5 +594,133 @@ describe("scheduling - appointments", () => {
         status: "waiting",
       })
     );
+  });
+});
+
+describe("charting - odontogram & periodontal", () => {
+  it("lets the owner/dentist write both toothConditions and periodontalChart", async () => {
+    await seedFixtures();
+    const db = ownerAContext().firestore();
+    const chartingRef = doc(db, "tenants/A/chartings/chartingA1");
+
+    await assertSucceeds(
+      updateDoc(chartingRef, {
+        toothConditions: { "11": { surfaces: { occlusal: "filled" }, notes: "" } },
+        lastEditedByUid: "ownerA",
+      })
+    );
+    await assertSucceeds(
+      updateDoc(chartingRef, {
+        periodontalChart: {
+          "11": { pocketDepths: [3, 3, 3, 3, 3, 3], bleeding: [true, false, false, false, false, false], mobilityGrade: 1 },
+        },
+        lastEditedByUid: "ownerA",
+      })
+    );
+  });
+
+  it("lets the assistant write periodontalChart alone, but rejects a write that also touches toothConditions", async () => {
+    await seedFixtures();
+    const db = assistantAContext().firestore();
+    const chartingRef = doc(db, "tenants/A/chartings/chartingA1");
+
+    await assertSucceeds(
+      updateDoc(chartingRef, {
+        periodontalChart: {
+          "11": { pocketDepths: [4, 3, 3, 3, 3, 4], bleeding: [true, true, false, false, false, false], mobilityGrade: 1 },
+        },
+        lastEditedByUid: "assistantA",
+      })
+    );
+    await assertFails(
+      updateDoc(chartingRef, {
+        periodontalChart: {
+          "11": { pocketDepths: [4, 3, 3, 3, 3, 4], bleeding: [true, true, false, false, false, false], mobilityGrade: 1 },
+        },
+        toothConditions: { "11": { surfaces: { occlusal: "crown" }, notes: "sneaked in by hygienist" } },
+        lastEditedByUid: "assistantA",
+      })
+    );
+  });
+
+  it("handles dotted-path partial map updates the same way as full-map replacement", async () => {
+    // The real ChartingRepository writes single-tooth entries via dotted field paths
+    // (e.g. "periodontalChart.11") rather than rewriting the whole map, so this
+    // verifies that shape specifically, not just an equivalent full-map replacement.
+    await seedFixtures();
+    const ownerDb = ownerAContext().firestore();
+    const assistantDb = assistantAContext().firestore();
+    const chartingRef = (db: typeof ownerDb) => doc(db, "tenants/A/chartings/chartingA1");
+
+    await assertSucceeds(
+      updateDoc(chartingRef(assistantDb), {
+        "periodontalChart.12": { pocketDepths: [2, 2, 2, 2, 2, 2], bleeding: [false, false, false, false, false, false], mobilityGrade: 0 },
+        lastEditedByUid: "assistantA",
+      })
+    );
+    await assertFails(
+      updateDoc(chartingRef(assistantDb), {
+        "toothConditions.12": { surfaces: { occlusal: "caries" }, notes: "" },
+        lastEditedByUid: "assistantA",
+      })
+    );
+    await assertSucceeds(
+      updateDoc(chartingRef(ownerDb), {
+        "toothConditions.12": { surfaces: { occlusal: "caries" }, notes: "" },
+        lastEditedByUid: "ownerA",
+      })
+    );
+  });
+
+  it("CORE: rejects the assistant's write of a treatmentPlan outright, though their read succeeds", async () => {
+    await seedFixtures();
+    const db = assistantAContext().firestore();
+
+    await assertSucceeds(getDoc(doc(db, "tenants/A/treatmentPlans/planA1")));
+    await assertFails(
+      updateDoc(doc(db, "tenants/A/treatmentPlans/planA1"), { status: "proposed" })
+    );
+    await assertFails(
+      setDoc(doc(db, "tenants/A/treatmentPlans/planA2"), {
+        patientId: "patientA1",
+        createdByUid: "assistantA",
+        createdAt: "2026-02-02T00:00:00Z",
+        status: "draft",
+        lineItems: [],
+        totalEstimate: 0,
+        patientApprovalSignatureUrl: null,
+        patientApprovedAt: null,
+      })
+    );
+  });
+
+  it("CORE: rejects the receptionist's read and write of chartings and treatmentPlans outright", async () => {
+    await seedFixtures();
+    const db = receptionistAContext().firestore();
+
+    await assertFails(getDoc(doc(db, "tenants/A/chartings/chartingA1")));
+    await assertFails(updateDoc(doc(db, "tenants/A/chartings/chartingA1"), { toothConditions: {} }));
+    await assertFails(getDoc(doc(db, "tenants/A/treatmentPlans/planA1")));
+    await assertFails(updateDoc(doc(db, "tenants/A/treatmentPlans/planA1"), { status: "proposed" }));
+  });
+
+  it("CORE: rejects the Lab Coordinator's read and write of chartings and treatmentPlans outright", async () => {
+    await seedFixtures();
+    const db = labCoordinatorAContext().firestore();
+
+    await assertFails(getDoc(doc(db, "tenants/A/chartings/chartingA1")));
+    await assertFails(updateDoc(doc(db, "tenants/A/chartings/chartingA1"), { toothConditions: {} }));
+    await assertFails(getDoc(doc(db, "tenants/A/treatmentPlans/planA1")));
+    await assertFails(updateDoc(doc(db, "tenants/A/treatmentPlans/planA1"), { status: "proposed" }));
+  });
+
+  it("CORE: denies clinic A staff any read or write of clinic B's chartings and treatmentPlans", async () => {
+    await seedFixtures();
+    const db = ownerAContext().firestore();
+
+    await assertFails(getDoc(doc(db, "tenants/B/chartings/chartingB1")));
+    await assertFails(updateDoc(doc(db, "tenants/B/chartings/chartingB1"), { toothConditions: {} }));
+    await assertFails(getDoc(doc(db, "tenants/B/treatmentPlans/planB1")));
+    await assertFails(updateDoc(doc(db, "tenants/B/treatmentPlans/planB1"), { status: "proposed" }));
   });
 });

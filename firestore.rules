@@ -88,6 +88,12 @@ service cloud.firestore {
       return request.resource.data.endTime > request.resource.data.startTime;
     }
 
+    // Phase 3a - diagnostic tooth-condition markings are dentist-only; a hygienist's
+    // routine periodontal-reading update must never also smuggle in a diagnosis.
+    function diagnosticChartingFields() {
+      return ['toothConditions'];
+    }
+
     // Only a platform admin may read/write their own admin doc. This collection is
     // intentionally separate from the clinic signup/invite flow - nothing here ever
     // grants platformAdmin; only the onPlatformAdminWrite Cloud Function's trigger
@@ -199,6 +205,44 @@ service cloud.firestore {
           patientExists(clinicId, request.resource.data.patientId);
 
         allow delete: if isOwnerOfTenant(clinicId) || isReceptionistOfTenant(clinicId);
+      }
+
+      // Phase 3a - odontogram & periodontal charting. Owner/dentist has full CRUD,
+      // including the diagnostic toothConditions field. Assistant/hygienist can read
+      // the whole document (they need the full picture to work from) but may only
+      // ever write periodontalChart - taking pocket-depth/bleeding/mobility readings
+      // is routinely their job, but diagnosis stays the dentist's call. Receptionist
+      // and Lab Coordinator get no access at all, same total exclusion as scheduling
+      // and patient records - clinical charting/diagnosis is out of scope for both.
+      match /chartings/{chartingId} {
+        allow read: if isOwnerOfTenant(clinicId) || isAssistantOfTenant(clinicId);
+
+        allow create: if isOwnerOfTenant(clinicId) &&
+          patientExists(clinicId, request.resource.data.patientId);
+
+        allow update: if (isOwnerOfTenant(clinicId) &&
+            patientExists(clinicId, request.resource.data.patientId)) ||
+          (isAssistantOfTenant(clinicId) &&
+            patientExists(clinicId, request.resource.data.patientId) &&
+            touchesNoneOf(diagnosticChartingFields()));
+
+        allow delete: if isOwnerOfTenant(clinicId);
+      }
+
+      // Treatment plans - owner/dentist only for anything beyond reading. Assistant
+      // gets the same full-record read as chartings (they should see what's planned)
+      // but no write of any kind: creating, editing, and approving a plan are all
+      // dentist/owner judgment calls, not a hygienist's.
+      match /treatmentPlans/{planId} {
+        allow read: if isOwnerOfTenant(clinicId) || isAssistantOfTenant(clinicId);
+
+        allow create: if isOwnerOfTenant(clinicId) &&
+          patientExists(clinicId, request.resource.data.patientId);
+
+        allow update: if isOwnerOfTenant(clinicId) &&
+          patientExists(clinicId, request.resource.data.patientId);
+
+        allow delete: if isOwnerOfTenant(clinicId);
       }
     }
 

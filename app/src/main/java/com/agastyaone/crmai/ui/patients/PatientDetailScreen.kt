@@ -46,6 +46,8 @@ fun PatientDetailScreen(
     onEditDemographics: () -> Unit,
     onEditClinicalDetails: () -> Unit,
     onStartIntake: () -> Unit,
+    onOpenChartings: () -> Unit,
+    onOpenTreatmentPlans: () -> Unit,
 ) {
     val repository = ServiceLocator.patientRepository
     val patient by repository.observePatient(clinicId, patientId).collectAsState(initial = null)
@@ -134,6 +136,20 @@ fun PatientDetailScreen(
                 if (role == Role.OWNER || role == Role.RECEPTIONIST) {
                     Button(onClick = onStartIntake, modifier = Modifier.fillMaxWidth()) {
                         Text("Run digital intake")
+                    }
+                }
+
+                // Phase 3a - odontogram/periodontal charting and treatment plans. Receptionist
+                // and Lab Coordinator get neither button at all; firestore.rules would reject
+                // their reads anyway, but there's no reason to show a dead end.
+                if (role == Role.OWNER || role == Role.ASSISTANT) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    SectionHeader("Clinical charting")
+                    OutlinedButton(onClick = onOpenChartings, modifier = Modifier.fillMaxWidth()) {
+                        Text("Chartings")
+                    }
+                    OutlinedButton(onClick = onOpenTreatmentPlans, modifier = Modifier.fillMaxWidth()) {
+                        Text("Treatment plans")
                     }
                 }
             }

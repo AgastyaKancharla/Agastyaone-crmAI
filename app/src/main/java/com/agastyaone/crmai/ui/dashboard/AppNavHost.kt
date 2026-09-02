@@ -16,6 +16,11 @@ import androidx.navigation.navArgument
 import com.agastyaone.crmai.core.Role
 import com.agastyaone.crmai.core.ServiceLocator
 import com.agastyaone.crmai.data.auth.SessionState
+import com.agastyaone.crmai.ui.charting.ChartingDetailScreen
+import com.agastyaone.crmai.ui.charting.ChartingListScreen
+import com.agastyaone.crmai.ui.charting.TreatmentPlanApprovalScreen
+import com.agastyaone.crmai.ui.charting.TreatmentPlanBuilderScreen
+import com.agastyaone.crmai.ui.charting.TreatmentPlanListScreen
 import com.agastyaone.crmai.ui.patients.DataRequestsScreen
 import com.agastyaone.crmai.ui.patients.IntakeFlowScreen
 import com.agastyaone.crmai.ui.patients.PatientClinicalEditScreen
@@ -43,12 +48,24 @@ private const val ROUTE_WALK_IN_PATIENT_ADD = "calendar/walkIn/add"
 private const val ROUTE_WAITLIST = "calendar/waitlist"
 private const val ARG_APPOINTMENT_ID = "appointmentId"
 private const val ROUTE_APPOINTMENT_DETAIL = "calendar/appointments/{$ARG_APPOINTMENT_ID}"
+private const val ROUTE_CHARTING_LIST = "patients/{$ARG_PATIENT_ID}/chartings"
+private const val ARG_CHARTING_ID = "chartingId"
+private const val ROUTE_CHARTING_DETAIL = "chartings/{$ARG_CHARTING_ID}"
+private const val ROUTE_TREATMENT_PLAN_LIST = "patients/{$ARG_PATIENT_ID}/treatmentPlans"
+private const val ROUTE_TREATMENT_PLAN_BUILDER = "patients/{$ARG_PATIENT_ID}/treatmentPlans/new"
+private const val ARG_PLAN_ID = "planId"
+private const val ROUTE_TREATMENT_PLAN_APPROVAL = "patients/{$ARG_PATIENT_ID}/treatmentPlans/{$ARG_PLAN_ID}"
 
 private fun patientDetailRoute(patientId: String) = "patients/$patientId"
 private fun patientEditDemographicsRoute(patientId: String) = "patients/$patientId/editDemographics"
 private fun patientEditClinicalRoute(patientId: String) = "patients/$patientId/editClinical"
 private fun patientIntakeRoute(patientId: String) = "patients/$patientId/intake"
 private fun appointmentDetailRoute(appointmentId: String) = "calendar/appointments/$appointmentId"
+private fun chartingListRoute(patientId: String) = "patients/$patientId/chartings"
+private fun chartingDetailRoute(chartingId: String) = "chartings/$chartingId"
+private fun treatmentPlanListRoute(patientId: String) = "patients/$patientId/treatmentPlans"
+private fun treatmentPlanBuilderRoute(patientId: String) = "patients/$patientId/treatmentPlans/new"
+private fun treatmentPlanApprovalRoute(patientId: String, planId: String) = "patients/$patientId/treatmentPlans/$planId"
 
 /** Everything reachable once the signed-in user has a resolved clinic role. */
 @Composable
@@ -117,6 +134,8 @@ fun AppNavHost(session: SessionState.Staff, onSignOut: () -> Unit) {
                 onEditDemographics = { navController.navigate(patientEditDemographicsRoute(patientId)) },
                 onEditClinicalDetails = { navController.navigate(patientEditClinicalRoute(patientId)) },
                 onStartIntake = { navController.navigate(patientIntakeRoute(patientId)) },
+                onOpenChartings = { navController.navigate(chartingListRoute(patientId)) },
+                onOpenTreatmentPlans = { navController.navigate(treatmentPlanListRoute(patientId)) },
             )
         }
         composable(
@@ -205,6 +224,79 @@ fun AppNavHost(session: SessionState.Staff, onSignOut: () -> Unit) {
                 clinicId = clinicId,
                 appointmentId = backStackEntry.arguments?.getString(ARG_APPOINTMENT_ID).orEmpty(),
                 role = session.role,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            ROUTE_CHARTING_LIST,
+            arguments = listOf(navArgument(ARG_PATIENT_ID) { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val patientId = backStackEntry.arguments?.getString(ARG_PATIENT_ID).orEmpty()
+            ChartingListScreen(
+                clinicId = clinicId,
+                uid = uid,
+                role = session.role,
+                patientId = patientId,
+                onOpenCharting = { chartingId -> navController.navigate(chartingDetailRoute(chartingId)) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            ROUTE_CHARTING_DETAIL,
+            arguments = listOf(navArgument(ARG_CHARTING_ID) { type = NavType.StringType }),
+        ) { backStackEntry ->
+            ChartingDetailScreen(
+                clinicId = clinicId,
+                uid = uid,
+                role = session.role,
+                chartingId = backStackEntry.arguments?.getString(ARG_CHARTING_ID).orEmpty(),
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            ROUTE_TREATMENT_PLAN_LIST,
+            arguments = listOf(navArgument(ARG_PATIENT_ID) { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val patientId = backStackEntry.arguments?.getString(ARG_PATIENT_ID).orEmpty()
+            TreatmentPlanListScreen(
+                clinicId = clinicId,
+                role = session.role,
+                patientId = patientId,
+                onOpenPlan = { planId -> navController.navigate(treatmentPlanApprovalRoute(patientId, planId)) },
+                onAddPlan = { navController.navigate(treatmentPlanBuilderRoute(patientId)) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            ROUTE_TREATMENT_PLAN_BUILDER,
+            arguments = listOf(navArgument(ARG_PATIENT_ID) { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val patientId = backStackEntry.arguments?.getString(ARG_PATIENT_ID).orEmpty()
+            TreatmentPlanBuilderScreen(
+                clinicId = clinicId,
+                uid = uid,
+                patientId = patientId,
+                onSaved = { planId ->
+                    navController.navigate(treatmentPlanApprovalRoute(patientId, planId)) {
+                        popUpTo(treatmentPlanListRoute(patientId))
+                    }
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            ROUTE_TREATMENT_PLAN_APPROVAL,
+            arguments = listOf(
+                navArgument(ARG_PATIENT_ID) { type = NavType.StringType },
+                navArgument(ARG_PLAN_ID) { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val patientId = backStackEntry.arguments?.getString(ARG_PATIENT_ID).orEmpty()
+            val planId = backStackEntry.arguments?.getString(ARG_PLAN_ID).orEmpty()
+            TreatmentPlanApprovalScreen(
+                clinicId = clinicId,
+                patientId = patientId,
+                planId = planId,
                 onBack = { navController.popBackStack() },
             )
         }

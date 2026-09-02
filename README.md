@@ -156,3 +156,25 @@ Hidden tiles are absent from the grid, not just disabled.
    directly — the security rules reject it (`PERMISSION_DENIED`).
 5. Check `tenants/{clinicId}/auditLog` in the console — entries exist for
    `clinic_created` and `staff_invite_sent`/`staff_invite_accepted`.
+
+## Phase 3a — Odontogram, periodontal charting & treatment planning
+
+- **Chartings** (`tenants/{clinicId}/chartings`): the odontogram (`toothConditions`) is
+  dentist/owner-only to write; the periodontal chart (`periodontalChart`) can be written
+  by the dentist/owner *or* an assistant/hygienist (routine pocket-depth/bleeding/mobility
+  readings are their job) - enforced with the same field-level rule pattern as Phase 2a's
+  patient-record split. Receptionist and Lab Coordinator have no access at all.
+- **Treatment plans** (`tenants/{clinicId}/treatmentPlans`): dentist/owner-only for every
+  write (create, edit, and patient-approval signing); assistant gets read-only access,
+  everyone else none.
+- **Tooth numbering**: chart data is always stored keyed by FDI tooth number. Display as
+  Universal instead is a per-clinic, per-tenant setting (`tenants/{clinicId}.toothNumberingSystem`,
+  `"FDI"` or `"Universal"`) - a display-layer conversion only, so switching it later never
+  renumbers or orphans existing chart data.
+
+> **⚠️ Billing caveat**: the treatment-plan line-item picker's seed procedure list
+> (`ProcedureCatalog.SEED_PROCEDURES`) uses internal placeholder codes (e.g. `"RCT"`,
+> `"SCALING"`) that are **not** GST HSN/SAC codes and carry no default pricing. Before
+> this ever feeds a real invoice (a later phase), the clinic's own accountant must verify
+> and map every procedure to its correct HSN/SAC code and tax rate. Treating the seed list
+> as billing-ready as-is would be a compliance mistake.

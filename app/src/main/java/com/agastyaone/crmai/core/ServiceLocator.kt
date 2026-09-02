@@ -1,10 +1,13 @@
 package com.agastyaone.crmai.core
 
 import com.agastyaone.crmai.data.auth.AuthRepository
+import com.agastyaone.crmai.data.charting.ChartingRepository
+import com.agastyaone.crmai.data.charting.TreatmentPlanRepository
 import com.agastyaone.crmai.data.functions.CloudFunctionsRepository
 import com.agastyaone.crmai.data.patients.PatientRepository
 import com.agastyaone.crmai.data.scheduling.ScheduleRepository
 import com.agastyaone.crmai.data.storage.SignatureUploader
+import com.agastyaone.crmai.data.tenant.TenantRepository
 
 /**
  * Deliberately minimal manual DI for this phase - a Hilt/Koin graph is overkill
@@ -12,8 +15,11 @@ import com.agastyaone.crmai.data.storage.SignatureUploader
  */
 object ServiceLocator {
     val authRepository: AuthRepository by lazy { AuthRepository() }
+    val chartingRepository: ChartingRepository by lazy { ChartingRepository() }
     val cloudFunctionsRepository: CloudFunctionsRepository by lazy { CloudFunctionsRepository() }
     val patientRepository: PatientRepository by lazy { PatientRepository() }
     val scheduleRepository: ScheduleRepository by lazy { ScheduleRepository() }
     val signatureUploader: SignatureUploader by lazy { SignatureUploader() }
+    val tenantRepository: TenantRepository by lazy { TenantRepository() }
+    val treatmentPlanRepository: TreatmentPlanRepository by lazy { TreatmentPlanRepository() }
 }
