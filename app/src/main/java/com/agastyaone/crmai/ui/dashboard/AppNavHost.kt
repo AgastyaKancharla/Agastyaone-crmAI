@@ -432,6 +432,7 @@ fun AppNavHost(session: SessionState.Staff, onSignOut: () -> Unit) {
             InvoiceDetailScreen(
                 clinicId = clinicId,
                 invoiceId = backStackEntry.arguments?.getString(ARG_INVOICE_ID).orEmpty(),
+                role = session.role,
                 onVoided = { navController.popBackStack() },
                 onBack = { navController.popBackStack() },
             )

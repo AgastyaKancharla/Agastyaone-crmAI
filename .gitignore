@@ -15,10 +15,18 @@ app/debug/
 # Node / Cloud Functions
 functions/node_modules/
 functions/lib/
+
+# Phase 4b - local-only Razorpay test secrets for the Functions emulator (see
+# README). Must never be committed - this is a hard requirement, not a convenience.
+functions/.secret.local
+functions/*.secret.local
 npm-debug.log*
 
 # Node / Firestore rules tests
 firestore-tests/node_modules/
+
+# Node / Cloud Functions integration tests
+functions-tests/node_modules/
 
 # Firebase local state
 .firebase/

@@ -72,4 +72,24 @@ class CloudFunctionsRepository(
         val data = hashMapOf("targetUid" to targetUid, "newRole" to newRole)
         functions.getHttpsCallable("updateStaffRole").call(data).await()
     }
+
+    data class PaymentLinkResult(val paymentLinkUrl: String, val razorpayPaymentLinkId: String)
+
+    /**
+     * Phase 4b - the Razorpay key secret never touches this app; the callable
+     * Cloud Function makes the actual Payment Links API call server-side and
+     * returns just the shareable URL. clinicId is deliberately not a parameter
+     * here - the function derives it from the caller's own custom claims, so this
+     * can never be pointed at another clinic's invoice.
+     */
+    suspend fun createPaymentLink(invoiceId: String): PaymentLinkResult {
+        val data = hashMapOf("invoiceId" to invoiceId)
+        val result = functions.getHttpsCallable("createPaymentLink").call(data).await()
+        @Suppress("UNCHECKED_CAST")
+        val response = result.data as Map<String, Any?>
+        return PaymentLinkResult(
+            paymentLinkUrl = response["paymentLinkUrl"] as String,
+            razorpayPaymentLinkId = response["razorpayPaymentLinkId"] as String,
+        )
+    }
 }

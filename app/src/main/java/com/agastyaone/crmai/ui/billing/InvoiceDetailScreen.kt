@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.agastyaone.crmai.core.Role
 import com.agastyaone.crmai.core.ServiceLocator
 import com.agastyaone.crmai.data.billing.Invoice
 import com.agastyaone.crmai.data.billing.InvoicePdfGenerator
@@ -58,6 +59,7 @@ import java.time.format.DateTimeFormatter
 fun InvoiceDetailScreen(
     clinicId: String,
     invoiceId: String,
+    role: Role,
     onVoided: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -70,10 +72,12 @@ fun InvoiceDetailScreen(
         invoice?.let { ServiceLocator.patientRepository.observePatient(clinicId, it.patientId) } ?: flowOf(null)
         ).collectAsState(initial = null)
     val clinic by ServiceLocator.tenantRepository.observeClinic(clinicId).collectAsState(initial = Clinic())
+    val canManagePayments = role == Role.OWNER || role == Role.RECEPTIONIST
 
     var showPaymentDialog by remember { mutableStateOf(false) }
     var showVoidConfirm by remember { mutableStateOf(false) }
     var isSharing by remember { mutableStateOf(false) }
+    var isGeneratingLink by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
@@ -119,7 +123,15 @@ fun InvoiceDetailScreen(
             if (current.igst > 0) Text("IGST: ${formatCurrency(current.igst)}")
             Text("Total: ${formatCurrency(current.total)}", style = MaterialTheme.typography.titleMedium)
             Text("Amount paid: ${formatCurrency(current.amountPaid)}")
-            Text("Status: ${PaymentStatus.fromId(current.paymentStatus).label}")
+            Text(
+                "Status: ${PaymentStatus.fromId(current.paymentStatus).label}",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            // Phase 4b - so staff can see at a glance whether a sent payment link was
+            // actually paid, without a separate trip to the Razorpay dashboard.
+            current.razorpayStatus?.let { status ->
+                Text("Payment link status: ${razorpayStatusLabel(status)}")
+            }
 
             Text(
                 "HSN/SAC codes are placeholder values, not verified for GST filing - confirm with your accountant.",
@@ -153,12 +165,43 @@ fun InvoiceDetailScreen(
                 },
             ) { Text(if (isSharing) "Preparing PDF..." else "Share PDF") }
 
-            OutlinedButton(onClick = { showPaymentDialog = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("Record payment")
-            }
+            if (canManagePayments) {
+                val alreadyFullyPaid = current.amountPaid >= current.total
+                Button(
+                    enabled = !isGeneratingLink && !alreadyFullyPaid,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        isGeneratingLink = true
+                        errorMessage = null
+                        scope.launch {
+                            runCatching {
+                                ServiceLocator.cloudFunctionsRepository.createPaymentLink(invoiceId)
+                            }.onSuccess { result ->
+                                isGeneratingLink = false
+                                sharePaymentLink(context, result.paymentLinkUrl)
+                            }.onFailure {
+                                isGeneratingLink = false
+                                errorMessage = it.message
+                            }
+                        }
+                    },
+                ) {
+                    Text(
+                        when {
+                            isGeneratingLink -> "Generating payment link..."
+                            alreadyFullyPaid -> "Invoice already fully paid"
+                            else -> "Generate payment link"
+                        },
+                    )
+                }
 
-            OutlinedButton(onClick = { showVoidConfirm = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("Void invoice")
+                OutlinedButton(onClick = { showPaymentDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Record payment")
+                }
+
+                OutlinedButton(onClick = { showVoidConfirm = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Void invoice")
+                }
             }
         }
 
@@ -233,6 +276,14 @@ private fun RecordPaymentDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         },
     )
+}
+
+private fun razorpayStatusLabel(status: String): String = when (status) {
+    "created" -> "Link sent, awaiting payment"
+    "paid" -> "Paid via Razorpay"
+    "expired" -> "Link expired"
+    "cancelled" -> "Link cancelled"
+    else -> status
 }
 
 private fun issuedDateText(invoice: Invoice): String {

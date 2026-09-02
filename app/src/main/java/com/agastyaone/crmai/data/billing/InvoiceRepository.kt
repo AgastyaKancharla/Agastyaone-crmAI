@@ -81,6 +81,7 @@ class InvoiceRepository(private val db: FirebaseFirestore = Firebase.firestore) 
                 "amountPaid" to 0.0,
                 "razorpayPaymentLinkId" to null,
                 "razorpayStatus" to null,
+                "razorpayPaymentId" to null,
                 "treatmentPlanId" to treatmentPlanId,
             )
             transaction.set(invoiceRef, data)

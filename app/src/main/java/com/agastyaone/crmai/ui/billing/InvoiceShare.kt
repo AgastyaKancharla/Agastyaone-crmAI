@@ -19,3 +19,15 @@ fun shareInvoicePdf(context: Context, file: File) {
     }
     context.startActivity(Intent.createChooser(intent, "Share invoice"))
 }
+
+/**
+ * Phase 4b - sharing a Razorpay payment link URL, same standard share-sheet pattern
+ * as the PDF above (just plain text instead of a file attachment).
+ */
+fun sharePaymentLink(context: Context, url: String) {
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, url)
+    }
+    context.startActivity(Intent.createChooser(intent, "Share payment link"))
+}
